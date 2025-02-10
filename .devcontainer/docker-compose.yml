@@ -15,6 +15,7 @@ services:
       - "61020:2222"
     environment:
       - AWS_PROFILE=localstack
+      - AWS_DEFAULT_REGION=
 
 
 volumes:
