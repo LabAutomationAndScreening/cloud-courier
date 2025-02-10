@@ -1,5 +1,5 @@
 # Changes here will be overwritten by Copier
-_commit: v0.0.5-7-gcbc3a75
+_commit: v0.0.5-8-gd5b4d09
 _src_path: gh:LabAutomationAndScreening/copier-python-package-template
 create_docs: false
 description: Agent to upload files to cloud
