@@ -20,7 +20,7 @@ a = Analysis(
     [os.path.join("src", "entrypoint.py")],
     pathex=["dist"],
     binaries=[],
-    data=[],
+    datas=[],
     hiddenimports=[
         "eventlet.hubs.epolls",
         "eventlet.hubs.kqueue",
@@ -69,7 +69,7 @@ coll = COLLECT(  # type: ignore # noqa: F821   the 'COLLECT' object is special t
     exe,
     a.binaries,
     a.zipfiles,
-    a.data,
+    a.datas,
     strip=False,
     upx=use_upx,
     upx_exclude=[
