@@ -1,5 +1,5 @@
-from cloud_courier.main import entrypoint
+from cloud_courier.main import main
 
 
 def test_dummy():
-    assert entrypoint() is None
+    assert main([]) == 0
