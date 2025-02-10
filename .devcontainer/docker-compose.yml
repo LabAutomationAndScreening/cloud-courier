@@ -1,0 +1,21 @@
+version: '3.8'
+services:
+  devcontainer:
+    build:
+      context: .
+      args:
+        REPO_NAME: cloud-courier
+    # You can run `devcontainer-info content-url` in codespaces to see what image base is
+    volumes:
+      - ..:/workspaces/cloud-courier:cached
+      # Break out the venv folder as a separate docker volume for better performance on Windows hosts
+      - python_venv:/workspaces/cloud-courier/.venv
+    command: sleep infinity
+    ports:
+      - "61020:2222"
+    environment:
+      - AWS_PROFILE=localstack
+
+
+volumes:
+  python_venv: {}
