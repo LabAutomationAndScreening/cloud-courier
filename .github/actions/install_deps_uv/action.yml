@@ -1,0 +1,67 @@
+name: Install requirements
+description: Setup python, and install dependencies using uv
+inputs:
+  python-version:
+    type: string
+    description: Python version to install
+  uv-sync:
+    required: false
+    default: true
+    type: boolean
+    description: Install the python packages with uv sync
+  project-dir:
+    type: string
+    description: What's the relative path to the project?
+    required: false
+    default: ./
+
+
+runs:
+  using: composite
+  steps:
+    - name: Get version of python
+      # TODO: be able to pull the default version from the devcontainer.json file
+      run: |
+        PYTHON_VERSION="${{ inputs.python-version }}"
+        echo "PYTHON_VERSION=$PYTHON_VERSION" >> "$GITHUB_ENV"
+      shell: bash
+
+    - name: Setup python
+      uses: actions/setup-python@v5.3.0
+      with:
+        python-version: ${{ env.PYTHON_VERSION }}
+
+    - name: Install Tooling (Linux)
+      if: runner.os == 'Linux'
+      run: sh .devcontainer/install-ci-tooling.sh ${{ env.PYTHON_VERSION }}
+      shell: bash
+
+    - name: Install Tooling (Windows)
+      if: runner.os == 'Windows'
+      run: .github/actions/install_deps_uv/install-ci-tooling.ps1 ${{ env.PYTHON_VERSION }}
+      shell: pwsh
+
+    - name: Install Dependencies (Linux)
+      if: ${{ inputs.uv-sync && runner.os == 'Linux' }}
+      run: |
+        sh .devcontainer/manual-setup-deps.sh ${{ env.PYTHON_VERSION }}
+      shell: bash
+
+    - name: Install Dependencies (Windows)
+      if: ${{ inputs.uv-sync && runner.os == 'Windows' }}
+      run: .github/actions/install_deps_uv/manual-setup-deps.ps1 ${{ env.PYTHON_VERSION }}
+      shell: pwsh
+
+    - name: List Dependencies (Linux)
+      if: ${{ inputs.uv-sync && runner.os == 'Linux' }}
+      working-directory: ${{ inputs.working-directory }}
+      run: |
+        uv pip list
+      shell: bash
+
+    - name: List Dependencies (Windows)
+      if: ${{ inputs.uv-sync && runner.os == 'Windows' }}
+      working-directory: ${{ inputs.working-directory }}
+      run: |
+        & uv pip list
+      shell: pwsh
