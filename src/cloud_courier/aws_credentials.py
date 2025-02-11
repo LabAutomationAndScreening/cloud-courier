@@ -1,8 +1,15 @@
 import configparser
 import datetime
+import logging
 import os
 from pathlib import Path
 from typing import TypedDict
+
+import boto3
+import botocore.session
+from botocore.credentials import RefreshableCredentials
+
+logger = logging.getLogger(__name__)
 
 
 class AwsCredentialsMetadata(TypedDict):
@@ -38,3 +45,25 @@ def read_aws_creds() -> AwsCredentialsMetadata:
     )
 
     return AwsCredentialsMetadata(access_key=access_key, secret_key=secret_key, token=token, expiry_time=expiry_time)
+
+
+def refresh_credentials() -> (  # pragma: no cover # This is a callback function that I'm not sure exactly how to test. But the underlying read_aws_creds() is tested
+    AwsCredentialsMetadata
+):
+    logger.info("Refreshing AWS credentials")
+    return read_aws_creds()
+
+
+def create_boto_session(aws_region: str) -> boto3.Session:
+    initial_credentials = read_aws_creds()
+
+    refreshable_creds = RefreshableCredentials.create_from_metadata(
+        metadata=initial_credentials,  # type: ignore[reportArgumentType] # pyright thinks this should accept dict[str, Any] ... but it seems like the TypedDict should be a valid subset of that
+        refresh_using=refresh_credentials,
+        method="custom-refresh",
+    )
+
+    botocore_session = botocore.session.get_session()
+    botocore_session._credentials = refreshable_creds  # type:ignore[reportAttributeAccessIssue] # noqa: SLF001 # assigning directly to the private variable is the recommended approach for refreshable credentials. # pyright thinks this should accept dict[str, Any] ... but it seems like the TypedDict should be a valid subset of that
+    botocore_session.set_config_variable("region", aws_region)  # Set your desired region
+    return boto3.Session(botocore_session=botocore_session)

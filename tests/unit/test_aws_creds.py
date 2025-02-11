@@ -2,12 +2,13 @@ import sys
 
 import pytest
 import time_machine
-from pytest_mock import MockerFixture
 
 from cloud_courier import aws_credentials
 from cloud_courier import path_to_aws_credentials
 
-from .fixtures import PATH_TO_EXAMPLE_WINDOWS_AWS_CREDS
+from .fixtures import mock_path_to_aws_credentials
+
+_fixtures = (mock_path_to_aws_credentials,)
 
 
 class TestPathToAwsCreds:
@@ -26,10 +27,8 @@ class TestPathToAwsCreds:
 
 class TestReadAwsCreds:
     @pytest.fixture(autouse=True)
-    def _setup(self, mocker: MockerFixture):
-        _ = mocker.patch.object(
-            aws_credentials, "path_to_aws_credentials", autospec=True, return_value=PATH_TO_EXAMPLE_WINDOWS_AWS_CREDS
-        )
+    def _setup(self, mock_path_to_aws_credentials: None):
+        pass
 
     def test_When_read__Then_creds_match_what_is_in_example_file(self):
         actual = aws_credentials.read_aws_creds()
