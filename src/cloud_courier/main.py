@@ -1,6 +1,8 @@
 import argparse
 import logging
 
+import boto3
+
 from .aws_credentials import create_boto_session
 from .logger_config import configure_logging
 
@@ -17,6 +19,11 @@ _ = parser.add_argument(
     action="store_true",
     help="Shut down the system before actually doing anything meaningful. Useful for unit testing.",
 )
+_ = parser.add_argument(
+    "--use-generic-boto-session",
+    action="store_true",
+    help="Use a generic boto3 session instead of attempting to use the SSM credentials. Useful for testing.",
+)
 
 
 def main(argv: list[str]) -> int:
@@ -27,5 +34,10 @@ def main(argv: list[str]) -> int:
         logger.exception("Error parsing command line arguments")
         return 2  # this is the exit code that is normally returned when exit_on_error=True for argparse
 
-    _ = create_boto_session(cli_args.aws_region)
+    boto3_session = boto3.Session() if cli_args.use_generic_boto_session else create_boto_session(cli_args.aws_region)
+    sts_client = boto3_session.client("sts")
+    if cli_args.immediate_shut_down:
+        logger.info("Exiting due to --immediate-shut-down")
+        return 0
+    logger.info(f"Connected to AWS as: {sts_client.get_caller_identity()}")
     return 0
