@@ -25,6 +25,7 @@ dev = [
     # Specific to this template
 
     "boto3-stubs[all]>=1.36.3",
+    "pytest-mock>=3.14.0",
 
     # Managed by upstream template
     "pyright>=1.1.393",

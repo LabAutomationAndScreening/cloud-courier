@@ -75,7 +75,7 @@ unfixable = [
 dummy-variable-rgx = "^_$|^__$"
 
 [lint.per-file-ignores]
-"src/*/*/__init__.py" = ["F401"] # imported but unused is not applicable to init except for the very top level init of a library, where you must use __all__ to ensure that py.typed works correctly
+"__init__.py" = ["F401"] # imported but unused is not applicable to init
 "tests/**/__init__.py" = ["F401"] # imported but unused is not applicable to init in tests
 "exceptions.py" = ["D100", "D101", "D102"] # Exceptions don't always require docstrings for modules, classes or methods
 "constants.py" = ["D100"] # Constants don't always require docstrings for modules
