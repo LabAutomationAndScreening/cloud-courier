@@ -67,3 +67,8 @@ def create_boto_session(aws_region: str) -> boto3.Session:
     botocore_session._credentials = refreshable_creds  # type:ignore[reportAttributeAccessIssue] # noqa: SLF001 # assigning directly to the private variable is the recommended approach for refreshable credentials. # pyright thinks this should accept dict[str, Any] ... but it seems like the TypedDict should be a valid subset of that
     botocore_session.set_config_variable("region", aws_region)  # Set your desired region
     return boto3.Session(botocore_session=botocore_session)
+
+
+def get_role_arn(session: boto3.Session) -> str:
+    sts_client = session.client("sts")
+    return sts_client.get_caller_identity()["Arn"]

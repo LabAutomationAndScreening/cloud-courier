@@ -65,7 +65,7 @@ exe = EXE(  # type: ignore # noqa: F821   the 'EXE' object is special to how pyi
     upx=use_upx,
     console=True,
 )
-coll = COLLECT(  # type: ignore # noqa: F821   the 'COLLECT' object is special to how pyinstaller reads the file
+coll = COLLECT(
     exe,
     a.binaries,
     a.zipfiles,
