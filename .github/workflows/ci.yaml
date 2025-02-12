@@ -97,6 +97,7 @@ jobs:
         with:
           name: exe-${{ runner.os }}-${{ matrix.python-version }}
           path: dist/
+          if-no-files-found: error
 
 
   required-check:

@@ -76,7 +76,7 @@ class MainLoop:
         return 0
 
 
-def main(argv: list[str]) -> int:
+def entrypoint(argv: list[str]) -> int:
     try:
         configure_logging()
         try:
