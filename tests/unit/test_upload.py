@@ -33,8 +33,8 @@ class TestUploadToS3:
     @pytest.mark.parametrize(
         ("file_name"),
         [
-            pytest.param("2_bytes.txt", id="tiny file still uses 2 parts"),
-            pytest.param("50_bytes.txt", id="multiple parts"),
+            pytest.param("3_bytes.txt", id="tiny file"),
+            pytest.param("50_bytes.txt", id="slightly larger file"),
         ],
     )
     def test_upload_to_s3(self, file_name: str):
@@ -53,7 +53,7 @@ class TestUploadToS3:
 
         with pytest.raises(ChecksumMismatchError, match=local_checksum):
             _ = upload_to_s3(
-                file_path=PATH_TO_EXAMPLE_DATA_FILES / "2_bytes.txt",
+                file_path=PATH_TO_EXAMPLE_DATA_FILES / "3_bytes.txt",
                 boto_session=self.boto_session,
                 bucket_name=self.bucket_name,
                 object_key=str(uuid.uuid4()),

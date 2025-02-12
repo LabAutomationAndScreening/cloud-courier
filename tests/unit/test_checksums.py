@@ -11,8 +11,8 @@ class TestCalculateAwsChecksum:
     @pytest.mark.parametrize(
         ("file_name", "part_size_bytes", "expected"),
         [
-            pytest.param("2_bytes.txt", None, "c20ad4d76fe97759aa27a0c99bff6710", id="tiny file done as single upload"),
-            pytest.param("50_bytes.txt", 11, "5b3a4ab2248dd6bde45b23ea276736ab-5", id="multiple parts"),
+            pytest.param("3_bytes.txt", None, "2737b49252e2a4c0fe4c342e92b13285", id="tiny file done as single upload"),
+            pytest.param("50_bytes.txt", 11, "079f011e02bb35156be572e82c69fed8-5", id="multiple parts"),
         ],
     )
     def test_calculate_aws_checksum(self, file_name: str, part_size_bytes: None | int, expected: str):
