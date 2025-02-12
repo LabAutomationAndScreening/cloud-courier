@@ -35,8 +35,13 @@ def read_aws_creds() -> AwsCredentialsMetadata:
     creds_path = path_to_aws_credentials()
     logger.debug(f'Attempting to read AWS credentials from "{creds_path}"')
     _ = config.read(creds_path)
-
-    creds = config["default"]
+    try:
+        creds = config["default"]
+    except KeyError:
+        logger.exception(
+            f'Error attempting to read AWS credentials from "{creds_path}". There was no "default" section in {config!r}'
+        )
+        raise
 
     access_key = creds["aws_access_key_id"]
     secret_key = creds["aws_secret_access_key"]
