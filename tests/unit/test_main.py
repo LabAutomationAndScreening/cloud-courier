@@ -18,6 +18,8 @@ from .fixtures import mock_path_to_aws_credentials
 _fixtures = (mock_path_to_aws_credentials,)
 logger = logging.getLogger(__name__)
 
+GENERIC_REQUIRED_CLI_ARGS = ("--aws-region=us-east-2", "--stop-flag-dir=/tmp")
+
 
 def test_Given_no_args__When_run__Then_returns_error_code():
     # TODO: capture the log message so the stderr is not overrun with log messages during testing
@@ -30,7 +32,7 @@ def test_Given_something_mocked_to_error__Then_error_logged(mocker: MockerFixtur
     _ = mocker.patch.object(main, "configure_logging", autospec=True, side_effect=RuntimeError(expected_error))
 
     with pytest.raises(RuntimeError, match=expected_error):
-        _ = entrypoint([])
+        _ = entrypoint(["--aws-region=us-east-2", "--stop-flag-dir=/tmp"])
 
     spied_logger.assert_called_once()
 

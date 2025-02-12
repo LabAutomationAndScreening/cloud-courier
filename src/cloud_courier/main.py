@@ -2,6 +2,7 @@ import argparse
 import functools
 import logging
 import time
+from collections.abc import Sequence
 from pathlib import Path
 from queue import SimpleQueue
 
@@ -78,7 +79,7 @@ class MainLoop:
         return 0
 
 
-def entrypoint(argv: list[str]) -> int:
+def entrypoint(argv: Sequence[str]) -> int:
     try:
         try:
             cli_args = parser.parse_args(argv)
@@ -86,6 +87,7 @@ def entrypoint(argv: list[str]) -> int:
             logger.exception("Error parsing command line arguments")
             return 2  # this is the exit code that is normally returned when exit_on_error=True for argparse
         configure_logging(log_level=cli_args.log_level)
+        logger.info('Starting "cloud-courier"')
         boto_session = (
             boto3.Session() if cli_args.use_generic_boto_session else create_boto_session(cli_args.aws_region)
         )

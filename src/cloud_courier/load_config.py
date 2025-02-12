@@ -9,5 +9,9 @@ class CourierConfig(BaseModel, frozen=True):
     app_config: AppConfig
 
 
+def extract_role_name_from_arn(arn: str) -> str:
+    return arn.split("/")[-1]
+
+
 def load_config_from_aws() -> None:
     pass
