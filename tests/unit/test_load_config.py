@@ -9,8 +9,8 @@ from cloud_courier import extract_role_name_from_arn
 from cloud_courier import load_config
 from cloud_courier import load_config_from_aws
 
-from .fixtures import COMPLEX_COURIER_CONFIG
-from .fixtures import GENERIC_COURIER_CONFIG
+from .constants import COMPLEX_COURIER_CONFIG
+from .constants import GENERIC_COURIER_CONFIG
 from .fixtures import cleanup_config_in_aws
 from .fixtures import store_config_in_aws
 

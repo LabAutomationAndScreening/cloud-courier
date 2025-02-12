@@ -8,10 +8,12 @@ from pytest_mock import MockerFixture
 
 from cloud_courier import MIN_MULTIPART_BYTES
 from cloud_courier import ChecksumMismatchError
+from cloud_courier import FolderToWatch
+from cloud_courier import convert_path_to_s3_object_key
 from cloud_courier import upload
 from cloud_courier import upload_to_s3
 
-from .fixtures import PATH_TO_EXAMPLE_DATA_FILES
+from .constants import PATH_TO_EXAMPLE_DATA_FILES
 
 
 class TestUploadToS3:
@@ -118,3 +120,32 @@ class TestUploadToS3:
 
             assert found_last_modified is True
             assert found_created is True
+
+
+@pytest.mark.parametrize(
+    ("file_path", "folder_config", "expected"),
+    [
+        pytest.param(
+            r"C:\text.txt",
+            FolderToWatch(folder_path="foo", s3_key_prefix="my-prefix", s3_bucket_name="baz"),
+            "my-prefix/C/text.txt",
+            id="simple path",
+        ),
+        pytest.param(
+            r"C:\this folder\a file.txt",
+            FolderToWatch(folder_path="foo", s3_key_prefix="your-prefix", s3_bucket_name="baz"),
+            "your-prefix/C/this_folder/a_file.txt",
+            id="spaces converted to underscores",
+        ),
+        pytest.param(
+            "/home/text.txt",
+            FolderToWatch(folder_path="foo", s3_key_prefix="best-prefix", s3_bucket_name="baz"),
+            "best-prefix/home/text.txt",
+            id="leading slash not duplicated",
+        ),
+    ],
+)
+def test_convert_path_to_s3_object_key(file_path: str, folder_config: FolderToWatch, expected: str):
+    actual = convert_path_to_s3_object_key(file_path, folder_config)
+
+    assert actual == expected

@@ -1,19 +1,28 @@
 import argparse
-import functools
 import logging
+import queue
 import time
 from collections.abc import Sequence
 from pathlib import Path
 from queue import SimpleQueue
+from typing import override
 
 import boto3
+from watchdog.events import FileClosedEvent
 from watchdog.events import FileSystemEvent
+from watchdog.events import FileSystemEventHandler
 from watchdog.observers import Observer
 
 from .aws_credentials import create_boto_session
 from .aws_credentials import get_role_arn
+from .courier_config_models import FolderToWatch
+from .load_config import CourierConfig
+from .load_config import load_config_from_aws
 from .logger_config import configure_logging
+from .upload import convert_path_to_s3_object_key
+from .upload import upload_to_s3
 
+type Checksum = str
 logger = logging.getLogger(__name__)
 parser = argparse.ArgumentParser(description="cloud-courier", exit_on_error=False)
 _ = parser.add_argument(
@@ -47,8 +56,21 @@ _ = parser.add_argument(
 _ = parser.add_argument("--log-level", type=str, default="INFO", help="The log level to use for the logger")
 
 
-def event_handler(file_system_events: SimpleQueue[FileSystemEvent], event: FileSystemEvent):
-    file_system_events.put(event)
+class EventHandler(FileSystemEventHandler):
+    def __init__(
+        self, *, file_system_events: SimpleQueue[tuple[FileSystemEvent, FolderToWatch]], folder_config: FolderToWatch
+    ):
+        super().__init__()
+        self.file_system_events = file_system_events
+        self.folder_config = folder_config
+
+    @override
+    def on_any_event(self, event: FileSystemEvent) -> None:
+        logger.debug(event)
+
+    @override
+    def on_closed(self, event: FileClosedEvent) -> None:
+        self.file_system_events.put((event, self.folder_config))
 
 
 class MainLoop:
@@ -56,10 +78,12 @@ class MainLoop:
         super().__init__()
         self.stop_flag_dir = Path(stop_flag_dir)
         self.boto_session = boto_session
-        self.idle_loop_sleep_seconds = idle_loop_sleep_seconds
-        self.file_system_events: SimpleQueue[FileSystemEvent]
+        self._idle_loop_sleep_seconds = idle_loop_sleep_seconds
+        self.file_system_events: SimpleQueue[tuple[FileSystemEvent, FolderToWatch]]
         self.observers: list[Observer] = []  # type: ignore[reportInvalidTypeForm] # pyright doesn't seem to like Observer
-        self.event_handler: functools.partial[None]
+        self.event_handler: EventHandler
+        self.config: CourierConfig
+        self.uploaded_files: dict[Path, Checksum]
 
     def _boot_up(self):
         """Perform initial activities before starting passive monitoring.
@@ -67,22 +91,55 @@ class MainLoop:
         This happens when the loop first starts, and also after any difference is detected in the configuration.
         """
         self.file_system_events = SimpleQueue()
-        self.event_handler = functools.partial(event_handler, self.file_system_events)
+        self.observers.clear()  # type: ignore[reportUnknownMemberType] # pyright doesn't seem to like Observer
+
+        self.config = load_config_from_aws(self.boto_session)
+        self.uploaded_files = {}
+        # TODO: check all the folders and raise an error if any don't exist
+
+    def _upload_file(self, file_path: Path, folder_config: FolderToWatch):
+        self.uploaded_files[file_path] = upload_to_s3(
+            file_path=file_path,
+            boto_session=self.boto_session,
+            bucket_name=folder_config.s3_bucket_name,
+            object_key=convert_path_to_s3_object_key(str(file_path), folder_config),
+        )
+
+    def _process_file_event_queue(self):
+        try:
+            event, folder_config = self.file_system_events.get(timeout=0.5)
+        except queue.Empty:
+            return
+        assert isinstance(event.src_path, str), (
+            f"Expected event.src_path to be a string, but got {event.src_path} of type {type(event.src_path)}"
+        )
+        self._upload_file(Path(event.src_path), folder_config)
 
     def run(self) -> int:
         self._boot_up()
         self.observers.append(Observer())  # type: ignore[reportUnknownMemberType] # pyright doesn't seem to like Observer
-        self.observers[0].schedule(self.event_handler, self.stop_flag_dir, recursive=False)  # type: ignore[reportUnknownMemberType] # pyright doesn't seem to like Observer
+        folder_config = next(iter(self.config.folders_to_watch.values()))
+        folder_path = folder_config.folder_path
+
+        self.observers[0].schedule(  # type: ignore[reportUnknownMemberType] # pyright doesn't seem to like Observer
+            EventHandler(file_system_events=self.file_system_events, folder_config=folder_config),
+            folder_path,
+            recursive=False,
+        )
         self.observers[0].start()  # type: ignore[reportUnknownMemberType] # pyright doesn't seem to like Observer
         while True:
-            if any(item.is_file() for item in self.stop_flag_dir.iterdir()):
+            if any(
+                item.is_file() for item in self.stop_flag_dir.iterdir()
+            ):  # TODO: maybe use a separate observer for the stop file
                 for item in self.stop_flag_dir.iterdir():
                     if item.is_file():
                         logger.info(f"Found stop flag file: {item}. Deleting it now")
                         item.unlink()
                 break
             logger.info(f"Connected to AWS as: {get_role_arn(self.boto_session)}")
-            time.sleep(self.idle_loop_sleep_seconds)
+            self._process_file_event_queue()
+
+            time.sleep(self._idle_loop_sleep_seconds)
         self.observers[0].stop()  # type: ignore[reportUnknownMemberType] # pyright doesn't seem to like Observer
         self.observers[0].join()  # type: ignore[reportUnknownMemberType] # pyright doesn't seem to like Observer
         return 0

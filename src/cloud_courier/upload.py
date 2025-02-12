@@ -6,6 +6,8 @@ from typing import TYPE_CHECKING
 
 import boto3
 
+from .courier_config_models import FolderToWatch
+
 if TYPE_CHECKING:
     from mypy_boto3_s3.type_defs import CompletedPartTypeDef
 
@@ -24,6 +26,16 @@ def _get_part_size(file_path: Path, part_size_bytes: int = MIN_MULTIPART_BYTES) 
     if file_size <= part_size_bytes:
         return False, file_size
     return True, part_size_bytes
+
+
+def convert_path_to_s3_object_key(file_path: str, folder_config: FolderToWatch) -> str:
+    # cannot accept a Path object here because trying to test windows paths on linux fails
+    # TODO: handle more invalid characters https://docs.aws.amazon.com/AmazonS3/latest/userguide/object-keys.html
+    file_path = file_path.replace(":", "")
+    file_path = file_path.replace("\\", "/")
+    file_path = file_path.replace(" ", "_")
+    file_path = file_path.removeprefix("/")
+    return f"{folder_config.s3_key_prefix}/{file_path}"
 
 
 def calculate_aws_checksum(file_path: Path, part_size_bytes: int = MIN_MULTIPART_BYTES) -> str:
@@ -60,13 +72,11 @@ def upload_to_s3(
         f"Starting {'multi-' if is_multi_part else 'single '}part upload for '{file_path}' ({file_size} bytes) with part size {part_size_bytes} bytes. Destination: s3://{bucket_name}/{object_key}"
     )
     if is_multi_part:
-        # 1. Initiate the multipart upload
         response = s3_client.create_multipart_upload(Bucket=bucket_name, Key=object_key)
         upload_id = response["UploadId"]
         parts: list[CompletedPartTypeDef] = []
 
         try:
-            # 2. Read and upload each part
             with file_path.open("rb") as f:
                 part_number = 1
                 while True:
@@ -81,14 +91,12 @@ def upload_to_s3(
                     parts.append({"ETag": part_response["ETag"], "PartNumber": part_number})
                     part_number += 1
 
-            # 3. Complete the multipart upload
             logger.info("Completing multipart upload...")
             _ = s3_client.complete_multipart_upload(
                 Bucket=bucket_name, Key=object_key, UploadId=upload_id, MultipartUpload={"Parts": parts}
             )
 
         except Exception:
-            # Abort the multipart upload if any error occurs
             logger.exception("An error occurred, aborting multipart upload.")
             _ = s3_client.abort_multipart_upload(Bucket=bucket_name, Key=object_key, UploadId=upload_id)
             raise
@@ -100,6 +108,7 @@ def upload_to_s3(
     last_modified_time = datetime.datetime.fromtimestamp(file_stats.st_mtime, tz=datetime.UTC).isoformat()
     # Creation time on Windows (st_ctime). On Linux, this is metadata change time.
     creation_time = datetime.datetime.fromtimestamp(file_stats.st_ctime, tz=datetime.UTC).isoformat()
+    # TODO: add custom tags specified by the config
     _ = s3_client.put_object_tagging(
         Bucket=bucket_name,
         Key=object_key,

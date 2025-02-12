@@ -14,8 +14,9 @@ from cloud_courier import entrypoint
 from cloud_courier import main
 
 from .fixtures import mock_path_to_aws_credentials
+from .fixtures import mocked_generic_config
 
-_fixtures = (mock_path_to_aws_credentials,)
+_fixtures = (mock_path_to_aws_credentials, mocked_generic_config)
 logger = logging.getLogger(__name__)
 
 GENERIC_REQUIRED_CLI_ARGS = ("--aws-region=us-east-2", "--stop-flag-dir=/tmp")
@@ -82,6 +83,7 @@ class TestArgParse(MainMixin):
 
 class TestShutdown(MainMixin):
     @pytest.mark.timeout(10)
+    @pytest.mark.usefixtures(mocked_generic_config.__name__)
     def test_Given_no_files_to_upload__When_flag_file_created__Then_clean_exit(self):
         thread = Thread(
             target=entrypoint,

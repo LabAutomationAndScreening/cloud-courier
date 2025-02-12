@@ -9,8 +9,10 @@ from .courier_config_models import FolderToWatch
 from .load_config import CourierConfig
 from .load_config import extract_role_name_from_arn
 from .load_config import load_config_from_aws
+from .main import MainLoop
 from .main import entrypoint
 from .upload import MIN_MULTIPART_BYTES
 from .upload import ChecksumMismatchError
 from .upload import calculate_aws_checksum
+from .upload import convert_path_to_s3_object_key
 from .upload import upload_to_s3

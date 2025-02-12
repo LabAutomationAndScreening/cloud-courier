@@ -4,7 +4,7 @@ import pytest
 
 from cloud_courier import calculate_aws_checksum
 
-from .fixtures import PATH_TO_EXAMPLE_DATA_FILES
+from .constants import PATH_TO_EXAMPLE_DATA_FILES
 
 
 class TestCalculateAwsChecksum:
