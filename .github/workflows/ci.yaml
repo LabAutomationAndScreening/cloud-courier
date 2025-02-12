@@ -74,11 +74,11 @@ jobs:
           DEFAULT_REGION: us-east-1
           AWS_ACCESS_KEY_ID: test
           AWS_SECRET_ACCESS_KEY: test
-        options: >-
-          --health-cmd "curl -f http://localhost:4566/health || exit 1"
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
+        # options: >-
+        #   --health-cmd "curl -f http://localhost:4566/health || exit 1"
+        #   --health-interval 10s
+        #   --health-timeout 5s
+        #   --health-retries 5
     steps:
       - name: Checkout code
         uses: actions/checkout@v4.2.2
