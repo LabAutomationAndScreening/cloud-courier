@@ -38,7 +38,7 @@ def read_aws_creds() -> AwsCredentialsMetadata:
     _ = config.read(creds_path)
     try:
         creds = config["default"]
-    except KeyError:
+    except KeyError:  # pragma: no cover # This is just an extra log message, not worth explicitly testing
         logger.exception(f'Error attempting to read AWS credentials from "{creds_path}".')
         raise
 

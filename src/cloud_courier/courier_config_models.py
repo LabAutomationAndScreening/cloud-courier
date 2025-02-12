@@ -6,6 +6,7 @@ SSM_PARAMETER_PREFIX_TO_ALIASES = f"{SSM_PARAMETER_PREFIX}/computer-aliases"
 
 
 class FolderToWatch(BaseModel, frozen=True):
+    config_format_version: str = "1.0"
     folder_path: str
     recursive: bool = True
     file_pattern: str = "*"
@@ -28,4 +29,5 @@ class FolderToWatch(BaseModel, frozen=True):
 
 
 class AppConfig(BaseModel, frozen=True):
+    config_format_version: str = "1.0"
     config_refresh_frequency_minutes: int = 60

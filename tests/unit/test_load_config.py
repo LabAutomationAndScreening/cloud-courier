@@ -1,5 +1,8 @@
+import uuid
+
 import boto3
 import pytest
+from pydantic import ValidationError
 from pytest_mock import MockerFixture
 
 from cloud_courier import extract_role_name_from_arn
@@ -50,3 +53,22 @@ class TestLoadConfigFromAws:
         actual = load_config_from_aws(self.session)
 
         assert actual.folders_to_watch == GENERIC_COURIER_CONFIG.folders_to_watch
+
+    def test_Given_malformed_folder_value__Then_log_contains_folder_descriptor(self, mocker: MockerFixture):
+        spied_logger_exception = mocker.spy(load_config.logger, "exception")
+        expected_descriptor = "fcs-files"
+        ssm_client = self.session.client("ssm")
+        value = str(uuid.uuid4())
+        _ = ssm_client.put_parameter(
+            Name=f"/cloud-courier/{GENERIC_COURIER_CONFIG.alias_name}/folders/{expected_descriptor}",
+            Value=value,
+            Type="String",
+            Overwrite=True,
+        )
+
+        with pytest.raises(ValidationError, match=value):
+            _ = load_config_from_aws(self.session)
+
+        spied_logger_exception.assert_called_once()
+        actual_call = spied_logger_exception.call_args_list[0]
+        assert f"for {expected_descriptor}" in actual_call[0][0]
