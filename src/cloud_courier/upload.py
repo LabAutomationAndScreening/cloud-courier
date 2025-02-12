@@ -1,3 +1,4 @@
+import datetime
 import hashlib
 import logging
 from pathlib import Path
@@ -95,9 +96,25 @@ def upload_to_s3(
         # Single part upload
         with file_path.open("rb") as f:
             s3_client.upload_fileobj(f, bucket_name, object_key)
-    logger.info("Upload completed successfully!")
+    file_stats = file_path.stat()
+    last_modified_time = datetime.datetime.fromtimestamp(file_stats.st_mtime, tz=datetime.UTC).isoformat()
+    # Creation time on Windows (st_ctime). On Linux, this is metadata change time.
+    creation_time = datetime.datetime.fromtimestamp(file_stats.st_ctime, tz=datetime.UTC).isoformat()
+    _ = s3_client.put_object_tagging(
+        Bucket=bucket_name,
+        Key=object_key,
+        Tagging={
+            "TagSet": [
+                {"Key": "uploaded-by", "Value": "cloud-courier"},
+                {"Key": "original-file-path", "Value": str(file_path)},
+                {"Key": "file-last-modified-at", "Value": last_modified_time},
+                {"Key": "file-created-at", "Value": creation_time},
+            ]
+        },
+    )
 
     s3_etag = s3_client.head_object(Bucket=bucket_name, Key=object_key)["ETag"].strip('"')
     if s3_etag != checksum:
         raise ChecksumMismatchError(checksum, s3_etag)
+    logger.info("Upload completed successfully!")
     return checksum

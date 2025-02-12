@@ -83,3 +83,38 @@ class TestUploadToS3:
             )
 
         assert actual_checksum == expected_checksum
+
+    def test_Then_default_object_tags_are_present(self):
+        s3_client = self.boto_session.client("s3")
+        object_key = str(uuid.uuid4())
+        num_default_tags = 4
+        with tempfile.TemporaryDirectory() as temp_dir:
+            file_path = Path(temp_dir) / str(uuid.uuid4())
+            with file_path.open("wb") as f:
+                _ = f.write(b"0" * 10)
+                f.flush()
+
+            _ = upload_to_s3(
+                file_path=file_path,
+                boto_session=self.boto_session,
+                bucket_name=self.bucket_name,
+                object_key=object_key,
+            )
+
+            response = s3_client.get_object_tagging(Bucket=self.bucket_name, Key=object_key)
+            tags = response.get("TagSet", [])
+            assert len(tags) == num_default_tags
+            assert {"Key": "uploaded-by", "Value": "cloud-courier"} in tags
+            assert {"Key": "original-file-path", "Value": str(file_path)} in tags
+            found_last_modified = False
+            found_created = False
+            for tag in tags:
+                if tag["Key"] == "file-last-modified-at":
+                    found_last_modified = True
+                    assert "+00:00" in tag["Value"]
+                if tag["Key"] == "file-created-at":
+                    found_created = True
+                    assert "+00:00" in tag["Value"]
+
+            assert found_last_modified is True
+            assert found_created is True
