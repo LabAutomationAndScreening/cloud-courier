@@ -34,13 +34,12 @@ def read_aws_creds() -> AwsCredentialsMetadata:
     config = configparser.ConfigParser()
     creds_path = path_to_aws_credentials()
     logger.debug(f'Attempting to read AWS credentials from "{creds_path}"')
+    # TODO: raise an error if file not found...apparently ConfigParser doesn't do that by default
     _ = config.read(creds_path)
     try:
         creds = config["default"]
     except KeyError:
-        logger.exception(
-            f'Error attempting to read AWS credentials from "{creds_path}". There was no "default" section in {config!r}'
-        )
+        logger.exception(f'Error attempting to read AWS credentials from "{creds_path}".')
         raise
 
     access_key = creds["aws_access_key_id"]
