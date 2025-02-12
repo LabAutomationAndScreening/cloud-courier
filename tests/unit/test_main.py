@@ -23,11 +23,20 @@ def test_Given_no_args__When_run__Then_returns_error_code():
     assert main([]) > 0
 
 
+# def test_Given_something_mocked_to_error__Then_error_logged(mocker: MockerFixture):
+#     spied_logger = mocker.spy(cloud_courier.main.logger, "exception")
+#     mocker.patch("cloud_courier.aws_credentials.read_aws_creds", side_effect=Exception("This is a test exception"))
+
+#     assert main([]) > 0
+
+#     spied_logger.assert_called_once_with(ANY, exc_info=ANY)
+
+
 class MainMixin:
     @pytest.fixture(autouse=True)
     def _setup(
         self,
-        mock_path_to_aws_credentials: None,  # noqa: ARG002 # pytest.usefixture cannot be used on a fixture
+        mock_path_to_aws_credentials: None,  # noqa: ARG002 # pytest.usefixture cannot be used on a fixturet
         flag_file_dir: Generator[str, None, None],
     ):
         self.flag_file_dir = str(flag_file_dir)

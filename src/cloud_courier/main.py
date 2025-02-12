@@ -1,9 +1,13 @@
 import argparse
+import functools
 import logging
 import time
 from pathlib import Path
+from queue import SimpleQueue
 
 import boto3
+from watchdog.events import FileSystemEvent
+from watchdog.observers import Observer
 
 from .aws_credentials import create_boto_session
 from .aws_credentials import get_role_arn
@@ -41,40 +45,58 @@ _ = parser.add_argument(
 )
 
 
+def event_handler(file_system_events: SimpleQueue[FileSystemEvent], event: FileSystemEvent):
+    file_system_events.put(event)
+
+
 class MainLoop:
     def __init__(self, *, stop_flag_dir: str, boto_session: boto3.Session, idle_loop_sleep_seconds: float):
         super().__init__()
         self.stop_flag_dir = Path(stop_flag_dir)
         self.boto_session = boto_session
         self.idle_loop_sleep_seconds = idle_loop_sleep_seconds
+        self.file_system_events: SimpleQueue[FileSystemEvent] = SimpleQueue()
+        self.observers: list[Observer] = []  # type: ignore[reportInvalidTypeForm] # pyright doesn't seem to like Observer
+        self.event_handler = functools.partial(event_handler, self.file_system_events)
 
     def run(self) -> int:
+        self.observers.append(Observer())  # type: ignore[reportUnknownMemberType] # pyright doesn't seem to like Observer
+        self.observers[0].schedule(self.event_handler, self.stop_flag_dir, recursive=False)  # type: ignore[reportUnknownMemberType] # pyright doesn't seem to like Observer
         while True:
             if any(item.is_file() for item in self.stop_flag_dir.iterdir()):
                 for item in self.stop_flag_dir.iterdir():
                     if item.is_file():
                         logger.info(f"Found stop flag file: {item}. Deleting it now")
                         item.unlink()
-                return 0
+                break
 
             time.sleep(self.idle_loop_sleep_seconds)
+        self.observers[0].stop()  # type: ignore[reportUnknownMemberType] # pyright doesn't seem to like Observer
+        self.observers[0].join()  # type: ignore[reportUnknownMemberType] # pyright doesn't seem to like Observer
+        return 0
 
 
 def main(argv: list[str]) -> int:
-    configure_logging()
     try:
-        cli_args = parser.parse_args(argv)
-    except argparse.ArgumentError:
-        logger.exception("Error parsing command line arguments")
-        return 2  # this is the exit code that is normally returned when exit_on_error=True for argparse
+        configure_logging()
+        try:
+            cli_args = parser.parse_args(argv)
+        except argparse.ArgumentError:
+            logger.exception("Error parsing command line arguments")
+            return 2  # this is the exit code that is normally returned when exit_on_error=True for argparse
 
-    boto3_session = boto3.Session() if cli_args.use_generic_boto_session else create_boto_session(cli_args.aws_region)
-    if cli_args.immediate_shut_down:
-        logger.info("Exiting due to --immediate-shut-down")
-        return 0
-    logger.info(f"Connected to AWS as: {get_role_arn(boto3_session)}")
-    return MainLoop(
-        stop_flag_dir=cli_args.stop_flag_dir,
-        boto_session=boto3_session,
-        idle_loop_sleep_seconds=cli_args.idle_loop_sleep_seconds,
-    ).run()
+        boto3_session = (
+            boto3.Session() if cli_args.use_generic_boto_session else create_boto_session(cli_args.aws_region)
+        )
+        if cli_args.immediate_shut_down:
+            logger.info("Exiting due to --immediate-shut-down")
+            return 0
+        logger.info(f"Connected to AWS as: {get_role_arn(boto3_session)}")
+        return MainLoop(
+            stop_flag_dir=cli_args.stop_flag_dir,
+            boto_session=boto3_session,
+            idle_loop_sleep_seconds=cli_args.idle_loop_sleep_seconds,
+        ).run()
+    except Exception:
+        logger.exception("An unhandled exception occurred")
+        raise
