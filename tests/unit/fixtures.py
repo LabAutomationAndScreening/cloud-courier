@@ -11,6 +11,7 @@ from cloud_courier import aws_credentials
 from cloud_courier.courier_config_models import SSM_PARAMETER_PREFIX
 from cloud_courier.courier_config_models import SSM_PARAMETER_PREFIX_TO_ALIASES
 
+PATH_TO_EXAMPLE_DATA_FILES = Path(__file__).parent.resolve() / "example_data_files"
 PATH_TO_EXAMPLE_WINDOWS_AWS_CREDS = Path(__file__).parent.resolve() / "example_windows_aws_creds.ini"
 
 GENERIC_COURIER_CONFIG = CourierConfig(

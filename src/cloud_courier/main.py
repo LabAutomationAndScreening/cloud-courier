@@ -57,11 +57,20 @@ class MainLoop:
         self.stop_flag_dir = Path(stop_flag_dir)
         self.boto_session = boto_session
         self.idle_loop_sleep_seconds = idle_loop_sleep_seconds
-        self.file_system_events: SimpleQueue[FileSystemEvent] = SimpleQueue()
+        self.file_system_events: SimpleQueue[FileSystemEvent]
         self.observers: list[Observer] = []  # type: ignore[reportInvalidTypeForm] # pyright doesn't seem to like Observer
+        self.event_handler: functools.partial[None]
+
+    def _boot_up(self):
+        """Perform initial activities before starting passive monitoring.
+
+        This happens when the loop first starts, and also after any difference is detected in the configuration.
+        """
+        self.file_system_events = SimpleQueue()
         self.event_handler = functools.partial(event_handler, self.file_system_events)
 
     def run(self) -> int:
+        self._boot_up()
         self.observers.append(Observer())  # type: ignore[reportUnknownMemberType] # pyright doesn't seem to like Observer
         self.observers[0].schedule(self.event_handler, self.stop_flag_dir, recursive=False)  # type: ignore[reportUnknownMemberType] # pyright doesn't seem to like Observer
         self.observers[0].start()  # type: ignore[reportUnknownMemberType] # pyright doesn't seem to like Observer

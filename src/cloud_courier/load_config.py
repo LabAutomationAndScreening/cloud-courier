@@ -88,6 +88,7 @@ def load_config_from_aws(session: boto3.Session) -> CourierConfig:
     return CourierConfig(
         folders_to_watch=folders_to_watch,
         app_config=AppConfig(),
-        role_name="blah",
+        role_name=role_name,
+        alias_name=alias,
         aws_region=session.region_name,
     )

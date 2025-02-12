@@ -82,9 +82,9 @@ class TestLoadGenericConfigFromAws(LoadConfigFromAws):
 class TestLoadComplexConfigFromAws(LoadConfigFromAws):
     _config = COMPLEX_COURIER_CONFIG
 
-    def test_many_folders(self):
+    def test_more_folders_than_ssm_get_parameters_pagination_size(self):
         actual = load_config_from_aws(self.session)
-        arbitrary_min_expected_num_folders = 76
+        arbitrary_min_expected_num_folders = 50
 
         assert len(actual.folders_to_watch) > arbitrary_min_expected_num_folders
         assert actual.folders_to_watch == COMPLEX_COURIER_CONFIG.folders_to_watch

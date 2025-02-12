@@ -1,0 +1,103 @@
+import hashlib
+import logging
+from pathlib import Path
+from typing import TYPE_CHECKING
+
+import boto3
+
+if TYPE_CHECKING:
+    from mypy_boto3_s3.type_defs import CompletedPartTypeDef
+
+logger = logging.getLogger(__name__)
+
+MIN_MULTIPART_BYTES = 5 * 1024 * 1024
+
+
+class ChecksumMismatchError(Exception):
+    def __init__(self, local_checksum: str, s3_checksum: str):
+        super().__init__(f"Checksum mismatch! Locally calculated: {local_checksum}, S3: {s3_checksum}")
+
+
+def _get_part_size(file_path: Path, part_size_bytes: int = MIN_MULTIPART_BYTES) -> tuple[bool, int]:
+    file_size = file_path.stat().st_size
+    if file_size <= part_size_bytes:
+        return False, file_size
+    return True, part_size_bytes
+
+
+def calculate_aws_checksum(file_path: Path, part_size_bytes: int = MIN_MULTIPART_BYTES) -> str:
+    is_multi_part, part_size_bytes = _get_part_size(file_path, part_size_bytes)
+    md5_list: list[bytes] = []
+
+    # Read the file in chunks and calculate MD5 for each part
+    with file_path.open("rb") as f:
+        while chunk := f.read(part_size_bytes):
+            md5_hash = hashlib.md5(chunk)  # noqa: S324 # we don't need this to be secure, this is just a checksum for file integrity
+            md5_list.append(md5_hash.digest())
+
+    if is_multi_part:
+        # Combine the part MD5s and compute the final ETag
+        combined_md5 = hashlib.md5(b"".join(md5_list)).hexdigest()  # noqa: S324 # we don't need this to be secure, this is just a checksum for file integrity
+        part_count = len(md5_list)
+        # Return the ETag in the format "<combined-hash>-<part-count>"
+        return f"{combined_md5}-{part_count}"
+    return md5_list[0].hex()
+
+
+def upload_to_s3(
+    *,
+    file_path: Path,
+    boto_session: boto3.Session,
+    bucket_name: str,
+    object_key: str,
+) -> str:
+    checksum = calculate_aws_checksum(file_path)
+    s3_client = boto_session.client("s3")
+    is_multi_part, part_size_bytes = _get_part_size(file_path)
+    file_size = file_path.stat().st_size
+    logger.info(
+        f"Starting {'multi-' if is_multi_part else 'single '}part upload for '{file_path}' ({file_size} bytes) with part size {part_size_bytes} bytes. Destination: s3://{bucket_name}/{object_key}"
+    )
+    if is_multi_part:
+        # 1. Initiate the multipart upload
+        response = s3_client.create_multipart_upload(Bucket=bucket_name, Key=object_key)
+        upload_id = response["UploadId"]
+        parts: list[CompletedPartTypeDef] = []
+
+        try:
+            # 2. Read and upload each part
+            with file_path.open("rb") as f:
+                part_number = 1
+                while True:
+                    data = f.read(part_size_bytes)
+                    if not data:
+                        break  # End of file reached
+                    logger.info(f"Uploading part {part_number}...")
+
+                    part_response = s3_client.upload_part(
+                        Bucket=bucket_name, Key=object_key, PartNumber=part_number, UploadId=upload_id, Body=data
+                    )
+                    parts.append({"ETag": part_response["ETag"], "PartNumber": part_number})
+                    part_number += 1
+
+            # 3. Complete the multipart upload
+            logger.info("Completing multipart upload...")
+            _ = s3_client.complete_multipart_upload(
+                Bucket=bucket_name, Key=object_key, UploadId=upload_id, MultipartUpload={"Parts": parts}
+            )
+
+        except Exception:
+            # Abort the multipart upload if any error occurs
+            logger.exception("An error occurred, aborting multipart upload.")
+            _ = s3_client.abort_multipart_upload(Bucket=bucket_name, Key=object_key, UploadId=upload_id)
+            raise
+    else:
+        # Single part upload
+        with file_path.open("rb") as f:
+            s3_client.upload_fileobj(f, bucket_name, object_key)
+    logger.info("Upload completed successfully!")
+
+    s3_etag = s3_client.head_object(Bucket=bucket_name, Key=object_key)["ETag"].strip('"')
+    if s3_etag != checksum:
+        raise ChecksumMismatchError(checksum, s3_etag)
+    return checksum
