@@ -62,6 +62,7 @@ class MainLoop:
     def run(self) -> int:
         self.observers.append(Observer())  # type: ignore[reportUnknownMemberType] # pyright doesn't seem to like Observer
         self.observers[0].schedule(self.event_handler, self.stop_flag_dir, recursive=False)  # type: ignore[reportUnknownMemberType] # pyright doesn't seem to like Observer
+        self.observers[0].start()  # type: ignore[reportUnknownMemberType] # pyright doesn't seem to like Observer
         while True:
             if any(item.is_file() for item in self.stop_flag_dir.iterdir()):
                 for item in self.stop_flag_dir.iterdir():
@@ -69,7 +70,7 @@ class MainLoop:
                         logger.info(f"Found stop flag file: {item}. Deleting it now")
                         item.unlink()
                 break
-
+            logger.info(f"Connected to AWS as: {get_role_arn(self.boto_session)}")
             time.sleep(self.idle_loop_sleep_seconds)
         self.observers[0].stop()  # type: ignore[reportUnknownMemberType] # pyright doesn't seem to like Observer
         self.observers[0].join()  # type: ignore[reportUnknownMemberType] # pyright doesn't seem to like Observer
@@ -85,16 +86,16 @@ def entrypoint(argv: list[str]) -> int:
             logger.exception("Error parsing command line arguments")
             return 2  # this is the exit code that is normally returned when exit_on_error=True for argparse
 
-        boto3_session = (
+        boto_session = (
             boto3.Session() if cli_args.use_generic_boto_session else create_boto_session(cli_args.aws_region)
         )
         if cli_args.immediate_shut_down:
             logger.info("Exiting due to --immediate-shut-down")
             return 0
-        logger.info(f"Connected to AWS as: {get_role_arn(boto3_session)}")
+        logger.info(f"Connected to AWS as: {get_role_arn(boto_session)}")
         return MainLoop(
             stop_flag_dir=cli_args.stop_flag_dir,
-            boto_session=boto3_session,
+            boto_session=boto_session,
             idle_loop_sleep_seconds=cli_args.idle_loop_sleep_seconds,
         ).run()
     except Exception:

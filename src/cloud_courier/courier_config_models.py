@@ -26,8 +26,3 @@ class FolderToWatch(BaseModel, frozen=True):
 
 class AppConfig(BaseModel, frozen=True):
     config_refresh_frequency_minutes: int = 60
-
-
-class CourierConfig(BaseModel, frozen=True):
-    folders_to_watch: tuple[FolderToWatch, ...]
-    app_config: AppConfig

@@ -6,11 +6,12 @@ from pathlib import Path
 from threading import Thread
 from unittest.mock import ANY
 
-import pytest, uuid
+import pytest
 from botocore.session import Session
 from pytest_mock import MockerFixture
 
-from cloud_courier import entrypoint, main
+from cloud_courier import entrypoint
+from cloud_courier import main
 
 from .fixtures import mock_path_to_aws_credentials
 
