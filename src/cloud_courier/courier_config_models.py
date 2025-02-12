@@ -27,6 +27,8 @@ class FolderToWatch(BaseModel, frozen=True):
 
 # TODO: add the ability to check that CPU usage has been sufficiently low the past X hours before beginning upload (concerns about an overnight run having been started, even when upload is normally restricted to night time only)
 
+# TODO: (maybe just infra-side) add heartbeat alert time window. add times when not to check for heartbeats (e.g. if computer is regularly turned off at night or weekends)
+
 
 class AppConfig(BaseModel, frozen=True):
     config_format_version: str = "1.0"

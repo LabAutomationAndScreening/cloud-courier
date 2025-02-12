@@ -9,6 +9,7 @@ from cloud_courier import extract_role_name_from_arn
 from cloud_courier import load_config
 from cloud_courier import load_config_from_aws
 
+from .fixtures import COMPLEX_COURIER_CONFIG
 from .fixtures import GENERIC_COURIER_CONFIG
 from .fixtures import cleanup_config_in_aws
 from .fixtures import store_config_in_aws
@@ -35,20 +36,24 @@ def test_extract_role_name_from_arn(arn: str, expected: str):
     assert actual == expected
 
 
-class TestLoadConfigFromAws:
+class LoadConfigFromAws:
+    _config = GENERIC_COURIER_CONFIG
+
     @pytest.fixture(autouse=True)
     def _setup(self, mocker: MockerFixture):
-        store_config_in_aws(GENERIC_COURIER_CONFIG)
-        self.session = boto3.Session(region_name=GENERIC_COURIER_CONFIG.aws_region)
+        store_config_in_aws(self._config)
+        self.session = boto3.Session(region_name=self._config.aws_region)
         _ = mocker.patch.object(
             load_config,
             "get_role_arn",
             autospec=True,
-            return_value=f"arn:aws:sts::423123810054:assumed-role/{GENERIC_COURIER_CONFIG.role_name}/mi-085b6ad72febfabf4",
+            return_value=f"arn:aws:sts::423123810054:assumed-role/{self._config.role_name}/mi-085b6ad72febfabf4",
         )
         yield
-        cleanup_config_in_aws(GENERIC_COURIER_CONFIG)
+        cleanup_config_in_aws(self._config)
 
+
+class TestLoadGenericConfigFromAws(LoadConfigFromAws):
     def test_single_folder(self):
         actual = load_config_from_aws(self.session)
 
@@ -72,3 +77,14 @@ class TestLoadConfigFromAws:
         spied_logger_exception.assert_called_once()
         actual_call = spied_logger_exception.call_args_list[0]
         assert f"for {expected_descriptor}" in actual_call[0][0]
+
+
+class TestLoadComplexConfigFromAws(LoadConfigFromAws):
+    _config = COMPLEX_COURIER_CONFIG
+
+    def test_many_folders(self):
+        actual = load_config_from_aws(self.session)
+        arbitrary_min_expected_num_folders = 76
+
+        assert len(actual.folders_to_watch) > arbitrary_min_expected_num_folders
+        assert actual.folders_to_watch == COMPLEX_COURIER_CONFIG.folders_to_watch

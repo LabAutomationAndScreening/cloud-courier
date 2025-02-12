@@ -95,6 +95,7 @@ def entrypoint(argv: Sequence[str]) -> int:
             logger.info("Exiting due to --immediate-shut-down")
             return 0
         logger.info(f"Connected to AWS as: {get_role_arn(boto_session)}")
+        # TODO: send SNS alert if error within main loop (until heartbeat and cloudwatch set up)
         return MainLoop(
             stop_flag_dir=cli_args.stop_flag_dir,
             boto_session=boto_session,
