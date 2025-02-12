@@ -32,7 +32,9 @@ def path_to_aws_credentials() -> Path:
 
 def read_aws_creds() -> AwsCredentialsMetadata:
     config = configparser.ConfigParser()
-    _ = config.read(path_to_aws_credentials())
+    creds_path = path_to_aws_credentials()
+    logger.debug(f'Attempting to read AWS credentials from "{creds_path}"')
+    _ = config.read(creds_path)
 
     creds = config["default"]
 

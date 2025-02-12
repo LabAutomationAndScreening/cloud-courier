@@ -43,6 +43,7 @@ _ = parser.add_argument(
     help="The number of seconds to sleep between iterations of the main loop if there are no files to upload.",
     default=5,
 )
+_ = parser.add_argument("--log-level", type=str, default="INFO", help="The log level to use for the logger")
 
 
 def event_handler(file_system_events: SimpleQueue[FileSystemEvent], event: FileSystemEvent):
@@ -79,13 +80,12 @@ class MainLoop:
 
 def entrypoint(argv: list[str]) -> int:
     try:
-        configure_logging()
         try:
             cli_args = parser.parse_args(argv)
         except argparse.ArgumentError:
             logger.exception("Error parsing command line arguments")
             return 2  # this is the exit code that is normally returned when exit_on_error=True for argparse
-
+        configure_logging(log_level=cli_args.log_level)
         boto_session = (
             boto3.Session() if cli_args.use_generic_boto_session else create_boto_session(cli_args.aws_region)
         )

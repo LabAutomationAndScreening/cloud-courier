@@ -7,7 +7,7 @@ import structlog
 SUBSYSTEM_NAME = "courier"
 
 
-def configure_logging(log_filename_prefix: str = "logs/cloud-courier-"):
+def configure_logging(log_filename_prefix: str = "logs/cloud-courier-", log_level: str = "INFO"):
     """Configure structlog to output both to the console and JSON to a file.
 
     This also configures stdlib logging to also use the same structlog formatters using details found here.
@@ -68,7 +68,6 @@ def configure_logging(log_filename_prefix: str = "logs/cloud-courier-"):
 
     # Defaults to 25MB
     log_size_max_bytes = 25 * 1024 * 1024
-    log_level = "INFO"  # TODO: allow this to be a CLI argument
 
     json_processors = [
         *shared_processors,

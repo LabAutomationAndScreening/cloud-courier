@@ -59,6 +59,24 @@ class TestArgParse(MainMixin):
 
         spied_set_config.assert_called_once_with(ANY, "region", expected_region)
 
+    def test_Given_log_level_specified__Then_log_level_passed_to_configure_logging(self, mocker: MockerFixture):
+        spied_configure_logging = mocker.spy(main, "configure_logging")
+        expected_log_level = random.choice(["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"])
+
+        assert (
+            entrypoint(
+                [
+                    f"--stop-flag-dir={self.flag_file_dir}",
+                    "--immediate-shut-down",
+                    "--aws-region=us-east-1",
+                    f"--log-level={expected_log_level}",
+                ]
+            )
+            == 0
+        )
+
+        spied_configure_logging.assert_called_once_with(log_level=expected_log_level)
+
 
 class TestShutdown(MainMixin):
     @pytest.mark.timeout(10)
