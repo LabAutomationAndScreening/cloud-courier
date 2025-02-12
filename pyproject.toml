@@ -32,7 +32,7 @@ dev = [
     "pytest-timeout>=2.3.1",
 
     # Managed by upstream template
-    "pyright>=1.1.393",
+    "pyright>=1.1.394",
     "pytest>=8.3.4",
     "pytest-cov>=6.0.0",
     "pytest-randomly>=3.16.0",
