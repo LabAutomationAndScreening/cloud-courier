@@ -70,7 +70,6 @@ jobs:
         ports:
           - 4566:4566
         env:
-          SERVICES: s3,ssm,iam,sts
           AWS_ACCESS_KEY_ID: test
           AWS_SECRET_ACCESS_KEY: test
 

@@ -19,6 +19,7 @@ dependencies = [
     "structlog>=25.1.0",
     "watchdog>=6.0.0",
     "pydantic>=2.10.6",
+    "boto3-stubs[ssm]"
 ]
 
 

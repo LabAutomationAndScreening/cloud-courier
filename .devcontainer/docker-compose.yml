@@ -23,7 +23,8 @@ services:
     ports:
       - "4566:4566"  # Main edge port for all AWS service emulation
     environment:
-      - SERVICES=s3,ssm,iam,sts
+      # really cryptic error messages unless DEBUG is set
+      - DEBUG=1
 
 volumes:
   python_venv: {}

@@ -1,6 +1,9 @@
 from pydantic import BaseModel
 from pydantic import Field
 
+SSM_PARAMETER_PREFIX = "/cloud-courier"
+SSM_PARAMETER_PREFIX_TO_ALIASES = f"{SSM_PARAMETER_PREFIX}/computer-aliases"
+
 
 class FolderToWatch(BaseModel, frozen=True):
     folder_path: str

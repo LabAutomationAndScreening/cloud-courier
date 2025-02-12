@@ -452,6 +452,9 @@ all = [
     { name = "mypy-boto3-workspaces-web" },
     { name = "mypy-boto3-xray" },
 ]
+ssm = [
+    { name = "mypy-boto3-ssm" },
+]
 
 [[package]]
 name = "botocore"
@@ -485,6 +488,7 @@ version = "0.1.0"
 source = { editable = "." }
 dependencies = [
     { name = "boto3" },
+    { name = "boto3-stubs", extra = ["ssm"] },
     { name = "pydantic" },
     { name = "structlog" },
     { name = "watchdog" },
@@ -506,6 +510,7 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "boto3", specifier = ">=1.36.3" },
+    { name = "boto3-stubs", extras = ["ssm"] },
     { name = "pydantic", specifier = ">=2.10.6" },
     { name = "structlog", specifier = ">=25.1.0" },
     { name = "watchdog", specifier = ">=6.0.0" },
