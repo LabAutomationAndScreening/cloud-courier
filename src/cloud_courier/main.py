@@ -119,8 +119,11 @@ class MainLoop:
         )  # infinitely long ago
 
     def _send_heartbeat_if_needed(self):
-        self._send_heartbeat()
-        self.last_heartbeat_timestamp = datetime.datetime.now(tz=datetime.UTC)
+        current_timestamp = datetime.datetime.now(tz=datetime.UTC)
+        seconds_since_last_heartbeat = (current_timestamp - self.last_heartbeat_timestamp).total_seconds()
+        if seconds_since_last_heartbeat >= self.config.app_config.heartbeat_frequency_seconds:
+            self._send_heartbeat()
+            self.last_heartbeat_timestamp = current_timestamp
 
     def _send_heartbeat(self):
         cloudwatch_client = self.boto_session.client("cloudwatch")
@@ -139,6 +142,7 @@ class MainLoop:
                 },
             ],
         )
+        logger.info("Sent heartbeat to CloudWatch")
 
     def _boot_up(self):
         """Perform initial activities before starting passive monitoring.
@@ -205,6 +209,7 @@ class MainLoop:
         self.observers[0].start()  # type: ignore[reportUnknownMemberType] # pyright doesn't seem to like Observer
         self.main_loop_entered.set()
         while True:
+            self._send_heartbeat_if_needed()
             if any(
                 item.is_file() for item in self.stop_flag_dir.iterdir()
             ):  # TODO: maybe use a separate observer for the stop file

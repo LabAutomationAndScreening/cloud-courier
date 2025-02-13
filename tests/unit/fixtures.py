@@ -88,7 +88,7 @@ class MainLoopMixin:
 
         assert self.thread.is_alive() is False
 
-    def _start_loop(self, *, mock_upload_to_s3: bool = True):
+    def _start_loop(self, *, mock_upload_to_s3: bool = True, mock_send_heartbeat: bool = True):
         self.spied_upload_file = self.mocker.spy(MainLoop, "_upload_file")
         self.loop = MainLoop(
             boto_session=self.boto_session,
@@ -98,6 +98,8 @@ class MainLoopMixin:
         )
         if mock_upload_to_s3:
             _ = self.mocker.patch.object(main, upload_to_s3.__name__, autospec=True, return_value=str(uuid.uuid4()))
+        if mock_send_heartbeat:
+            self.mocked_send_heartbeat = self.mocker.patch.object(MainLoop, "_send_heartbeat", autospec=True)
         self.thread = Thread(
             target=self.loop.run,
         )
