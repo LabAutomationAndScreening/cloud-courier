@@ -1,3 +1,5 @@
+"""Models for the Cloud Courier configuration which are shared between the application and infrastructure code."""
+
 from pydantic import BaseModel
 from pydantic import Field
 
