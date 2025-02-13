@@ -1,6 +1,7 @@
 import argparse
 import logging
 import queue
+import threading
 import time
 from collections.abc import Sequence
 from pathlib import Path
@@ -84,6 +85,7 @@ class MainLoop:
         self.event_handler: EventHandler
         self.config: CourierConfig
         self.uploaded_files: dict[Path, Checksum]
+        self.main_loop_entered = threading.Event()  # helpful for unit testing
 
     def _boot_up(self):
         """Perform initial activities before starting passive monitoring.
@@ -120,14 +122,14 @@ class MainLoop:
         self.observers.append(Observer())  # type: ignore[reportUnknownMemberType] # pyright doesn't seem to like Observer
         folder_config = next(iter(self.config.folders_to_watch.values()))
         folder_path = folder_config.folder_path
-
         self.observers[0].schedule(  # type: ignore[reportUnknownMemberType] # pyright doesn't seem to like Observer
             EventHandler(file_system_events=self.file_system_events, folder_config=folder_config),
             folder_path,
-            recursive=False,
+            recursive=folder_config.recursive,
         )
         self.observers[0].start()  # type: ignore[reportUnknownMemberType] # pyright doesn't seem to like Observer
         while True:
+            self.main_loop_entered.set()
             if any(
                 item.is_file() for item in self.stop_flag_dir.iterdir()
             ):  # TODO: maybe use a separate observer for the stop file

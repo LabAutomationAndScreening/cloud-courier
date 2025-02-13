@@ -15,4 +15,5 @@ from .upload import MIN_MULTIPART_BYTES
 from .upload import ChecksumMismatchError
 from .upload import calculate_aws_checksum
 from .upload import convert_path_to_s3_object_key
+from .upload import dummy_function_during_multipart_upload
 from .upload import upload_to_s3

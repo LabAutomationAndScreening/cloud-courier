@@ -9,8 +9,8 @@ class FolderToWatch(BaseModel, frozen=True):
     config_format_version: str = "1.0"
     folder_path: str
     recursive: bool = True
-    file_pattern: str = "*"
-    ignore_patterns: list[str] = Field(default_factory=list)
+    file_pattern: str = "*"  # TODO: implement
+    ignore_patterns: list[str] = Field(default_factory=list)  # TODO: implement
     s3_key_prefix: str
     s3_bucket_name: str
     # TODO: allow truncating part of the file path prefix

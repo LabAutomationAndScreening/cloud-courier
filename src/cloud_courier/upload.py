@@ -57,6 +57,13 @@ def calculate_aws_checksum(file_path: Path, part_size_bytes: int = MIN_MULTIPART
     return md5_list[0].hex()
 
 
+def dummy_function_during_multipart_upload():
+    """Do nothing.
+
+    This function is used to be able to mock an error occurring during upload.
+    """
+
+
 def upload_to_s3(
     *,
     file_path: Path,
@@ -90,6 +97,7 @@ def upload_to_s3(
                     )
                     parts.append({"ETag": part_response["ETag"], "PartNumber": part_number})
                     part_number += 1
+                    dummy_function_during_multipart_upload()
 
             logger.info("Completing multipart upload...")
             _ = s3_client.complete_multipart_upload(

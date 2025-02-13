@@ -10,6 +10,7 @@ from cloud_courier import MIN_MULTIPART_BYTES
 from cloud_courier import ChecksumMismatchError
 from cloud_courier import FolderToWatch
 from cloud_courier import convert_path_to_s3_object_key
+from cloud_courier import dummy_function_during_multipart_upload
 from cloud_courier import upload
 from cloud_courier import upload_to_s3
 
@@ -24,13 +25,39 @@ class TestUploadToS3:
         self.aws_region = "us-east-1"
         self.bucket_name = str(uuid.uuid4())
         self.boto_session = boto3.Session(region_name=self.aws_region)
-        s3_client = self.boto_session.client("s3")
-        _ = s3_client.create_bucket(Bucket=self.bucket_name)
+        self.s3_client = self.boto_session.client("s3")
+        _ = self.s3_client.create_bucket(Bucket=self.bucket_name)
         yield
         s3 = boto3.resource("s3", region_name=self.aws_region)
         bucket = s3.Bucket(self.bucket_name)
         _ = bucket.objects.all().delete()
-        _ = s3_client.delete_bucket(Bucket=self.bucket_name)
+        _ = self.s3_client.delete_bucket(Bucket=self.bucket_name)
+
+    def test_Given_something_mocked_to_error__When_multipart_uploading__Then_upload_aborted(
+        self, mocker: MockerFixture
+    ):
+        expected_error = str(uuid.uuid4())
+        _ = mocker.patch.object(
+            upload,
+            dummy_function_during_multipart_upload.__name__,
+            autospec=True,
+            side_effect=RuntimeError(expected_error),
+        )
+        with tempfile.NamedTemporaryFile() as f:
+            _ = f.write(b"0" * (MIN_MULTIPART_BYTES + 1))
+            f.flush()
+
+            with pytest.raises(RuntimeError, match=expected_error):
+                _ = upload_to_s3(
+                    file_path=Path(f.name),
+                    boto_session=self.boto_session,
+                    bucket_name=self.bucket_name,
+                    object_key=str(uuid.uuid4()),
+                )
+
+        response = self.s3_client.list_multipart_uploads(Bucket=self.bucket_name)
+        uploads = response.get("Uploads", [])
+        assert len(uploads) == 0
 
     @pytest.mark.parametrize(
         ("file_name"),
@@ -87,7 +114,6 @@ class TestUploadToS3:
         assert actual_checksum == expected_checksum
 
     def test_Then_default_object_tags_are_present(self):
-        s3_client = self.boto_session.client("s3")
         object_key = str(uuid.uuid4())
         num_default_tags = 4
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -103,7 +129,7 @@ class TestUploadToS3:
                 object_key=object_key,
             )
 
-            response = s3_client.get_object_tagging(Bucket=self.bucket_name, Key=object_key)
+            response = self.s3_client.get_object_tagging(Bucket=self.bucket_name, Key=object_key)
             tags = response.get("TagSet", [])
             assert len(tags) == num_default_tags
             assert {"Key": "uploaded-by", "Value": "cloud-courier"} in tags
