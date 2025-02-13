@@ -14,6 +14,7 @@ from pytest_mock import MockerFixture
 from cloud_courier import MainLoop
 from cloud_courier import load_config_from_aws
 from cloud_courier import main
+from cloud_courier import parse_upload_record
 from cloud_courier import upload_to_s3
 
 from .constants import GENERIC_COURIER_CONFIG
@@ -22,7 +23,7 @@ from .fixtures import mocked_generic_config
 _fixtures = (mocked_generic_config,)
 
 
-class TestFolderMonitoring:
+class MainLoopMixin:
     @pytest.fixture(autouse=True)
     def _setup(self, mocker: MockerFixture):
         self.boto_session = boto3.Session(region_name=GENERIC_COURIER_CONFIG.aws_region)
@@ -39,11 +40,12 @@ class TestFolderMonitoring:
             )
             self.folder_config = self.config.folders_to_watch["fcs-files"]
             _ = mocker.patch.object(main, load_config_from_aws.__name__, autospec=True, return_value=self.config)
+            self.upload_record_file_path = Path(record_dir) / str(uuid.uuid4()) / "record.tsv"
             self.loop = MainLoop(
                 boto_session=self.boto_session,
                 stop_flag_dir=stop_flag_dir,
                 idle_loop_sleep_seconds=0.1,
-                previously_uploaded_files_record_path=Path(record_dir) / str(uuid.uuid4()) / "record.tsv",
+                previously_uploaded_files_record_path=self.upload_record_file_path,
             )
 
             yield
@@ -56,7 +58,9 @@ class TestFolderMonitoring:
 
         assert self.thread.is_alive() is False
 
-    def _start_loop(self):
+    def _start_loop(self, *, mock_upload_to_s3: bool = True):
+        if mock_upload_to_s3:
+            _ = self.mocker.patch.object(main, upload_to_s3.__name__, autospec=True, return_value=str(uuid.uuid4()))
         self.thread = Thread(
             target=self.loop.run,
         )
@@ -82,6 +86,8 @@ class TestFolderMonitoring:
         else:
             pytest.fail("File was not uploaded")
 
+
+class TestFolderMonitoring(MainLoopMixin):
     def test_When_file_created_by_opening_and_closing__Then_mock_uploaded_with_correct_args_and_added_to_internal_memory(
         self,
     ):
@@ -90,7 +96,7 @@ class TestFolderMonitoring:
         mocked_upload_to_s3 = self.mocker.patch.object(
             main, upload_to_s3.__name__, autospec=True, return_value=expected_checksum
         )
-        self._start_loop()
+        self._start_loop(mock_upload_to_s3=False)
 
         with file_path.open("w") as file:
             _ = file.write("test")
@@ -112,8 +118,6 @@ class TestFolderMonitoring:
                 _ = file.write("test")
 
             file_path = Path(self.watch_dir) / f"{uuid.uuid4()}.txt"
-            expected_checksum = str(uuid.uuid4())
-            _ = self.mocker.patch.object(main, upload_to_s3.__name__, autospec=True, return_value=expected_checksum)
             self._start_loop()
             shutil.copy(original_file_path, file_path)
 
@@ -131,8 +135,6 @@ class TestFolderMonitoring:
                 _ = file.write("test")
 
             file_path = Path(self.watch_dir) / f"{uuid.uuid4()}.txt"
-            expected_checksum = str(uuid.uuid4())
-            _ = self.mocker.patch.object(main, upload_to_s3.__name__, autospec=True, return_value=expected_checksum)
             self._start_loop()
             shutil.move(original_file_path, file_path)
 
@@ -143,7 +145,6 @@ class TestFolderMonitoring:
         sub_dir = Path(self.watch_dir) / str(uuid.uuid4())
         sub_dir.mkdir(parents=True, exist_ok=True)
         file_path = sub_dir / f"{uuid.uuid4()}.txt"
-        _ = self.mocker.patch.object(main, upload_to_s3.__name__, autospec=True, return_value=str(uuid.uuid4()))
         self._start_loop()
 
         with file_path.open("w") as file:
@@ -158,10 +159,44 @@ class TestFolderMonitoring:
         sub_dir = Path(self.watch_dir) / str(uuid.uuid4())
         sub_dir.mkdir(parents=True, exist_ok=True)
         file_path = sub_dir / f"{uuid.uuid4()}.txt"
-        _ = self.mocker.patch.object(main, upload_to_s3.__name__, autospec=True, return_value=str(uuid.uuid4()))
         self._start_loop()
 
         with file_path.open("w") as file:
             _ = file.write("test")
+
+        self._fail_if_file_uploaded(file_path)
+
+
+class TestInitialFolderSearch(MainLoopMixin):
+    def test_Given_folder_config_includes_subfolders__When_file_initially_exists_in_subfolders__Then_file_mock_uploaded_and_added_to_upload_record(
+        self,
+    ):
+        assert self.folder_config.recursive is True
+        sub_dir = Path(self.watch_dir) / str(uuid.uuid4())
+        sub_dir.mkdir(parents=True, exist_ok=True)
+        file_path = sub_dir / f"{uuid.uuid4()}.txt"
+        with file_path.open("w") as file:
+            _ = file.write("test")
+
+        self._start_loop()
+
+        self._fail_if_file_not_uploaded(file_path)
+
+        uploaded_files = parse_upload_record(self.upload_record_file_path)
+        assert file_path in uploaded_files
+
+    def test_Given_folder_config_does_not_include_subfolders__When_file_initially_exists_in_subfolders__Then_no_upload(
+        self,
+    ):
+        self.config.folders_to_watch["fcs-files"] = self.config.folders_to_watch["fcs-files"].model_copy(
+            update={"recursive": False}
+        )
+        sub_dir = Path(self.watch_dir) / str(uuid.uuid4())
+        sub_dir.mkdir(parents=True, exist_ok=True)
+        file_path = sub_dir / f"{uuid.uuid4()}.txt"
+        with file_path.open("w") as file:
+            _ = file.write("test")
+
+        self._start_loop()
 
         self._fail_if_file_uploaded(file_path)

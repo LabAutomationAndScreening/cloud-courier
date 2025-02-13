@@ -10,7 +10,10 @@ from .load_config import CourierConfig
 from .load_config import extract_role_name_from_arn
 from .load_config import load_config_from_aws
 from .main import MainLoop
+from .main import add_to_upload_record
+from .main import create_record_file
 from .main import entrypoint
+from .main import parse_upload_record
 from .upload import MIN_MULTIPART_BYTES
 from .upload import ChecksumMismatchError
 from .upload import calculate_aws_checksum

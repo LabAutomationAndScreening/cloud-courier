@@ -4,6 +4,7 @@ import os
 import queue
 import threading
 import time
+from collections import defaultdict
 from collections.abc import Sequence
 from pathlib import Path
 from queue import SimpleQueue
@@ -18,6 +19,7 @@ from watchdog.observers import Observer
 from .aws_credentials import create_boto_session
 from .aws_credentials import get_role_arn
 from .cli import parser
+from .constants import Checksum
 from .courier_config_models import FolderToWatch
 from .load_config import CourierConfig
 from .load_config import load_config_from_aws
@@ -25,7 +27,6 @@ from .logger_config import configure_logging
 from .upload import convert_path_to_s3_object_key
 from .upload import upload_to_s3
 
-type Checksum = str
 logger = logging.getLogger(__name__)
 
 
@@ -55,6 +56,20 @@ def create_record_file(record_file_path: Path):
         _ = f.write("file_path\tcloud_path\tchecksum\n")
 
 
+def add_to_upload_record(*, record_file_path: Path, uploaded_file_path: Path, checksum: str, cloud_path: str):
+    with record_file_path.open("a") as f:
+        _ = f.write(f"{uploaded_file_path}\t{cloud_path}\t{checksum}\n")
+
+
+def parse_upload_record(record_file_path: Path) -> dict[Path, set[Checksum]]:
+    uploaded_files: dict[Path, set[Checksum]] = defaultdict(set)
+    with record_file_path.open("r") as f:
+        for line in f:
+            file_path, _, checksum = line.strip().split("\t")
+            uploaded_files[Path(file_path)].add(checksum)
+    return uploaded_files
+
+
 class EventHandler(FileSystemEventHandler):
     def __init__(
         self, *, file_system_events: SimpleQueue[tuple[FileSystemEvent, FolderToWatch]], folder_config: FolderToWatch
@@ -82,6 +97,7 @@ class MainLoop:
         previously_uploaded_files_record_path: Path,
     ):
         super().__init__()
+        self.previously_uploaded_files_record_path = previously_uploaded_files_record_path
         self.stop_flag_dir = Path(stop_flag_dir)
         self.boto_session = boto_session
         self._idle_loop_sleep_seconds = idle_loop_sleep_seconds
@@ -89,9 +105,9 @@ class MainLoop:
         self.observers: list[Observer] = []  # type: ignore[reportInvalidTypeForm] # pyright doesn't seem to like Observer
         self.event_handler: EventHandler
         self.config: CourierConfig
-        self.uploaded_files: dict[Path, Checksum]
+        self.uploaded_files: dict[Path, set[Checksum]] = defaultdict(set)
         self.main_loop_entered = threading.Event()  # helpful for unit testing
-        create_record_file(previously_uploaded_files_record_path)
+        create_record_file(self.previously_uploaded_files_record_path)
 
     def _boot_up(self):
         """Perform initial activities before starting passive monitoring.
@@ -102,15 +118,33 @@ class MainLoop:
         self.observers.clear()  # type: ignore[reportUnknownMemberType] # pyright doesn't seem to like Observer
 
         self.config = load_config_from_aws(self.boto_session)
-        self.uploaded_files = {}
         # TODO: check all the folders and raise an error if any don't exist
+        # TODO: implement refreshing the config
+
+        folder_config = next(iter(self.config.folders_to_watch.values()))  # TODO: support multiple folders to search
+        folder_path = Path(folder_config.folder_path)
+        glob_path = "*"
+        if folder_config.recursive:
+            glob_path = "**/*"
+        for file in folder_path.glob(glob_path):
+            if file.is_file():
+                # This isn't truly a FileClosedEvent, but it's easier to just have a single codepath for all uploading
+                self.file_system_events.put((FileClosedEvent(src_path=str(file)), folder_config))
 
     def _upload_file(self, file_path: Path, folder_config: FolderToWatch):
-        self.uploaded_files[file_path] = upload_to_s3(
+        object_key = convert_path_to_s3_object_key(str(file_path), folder_config)
+        checksum = upload_to_s3(
             file_path=file_path,
             boto_session=self.boto_session,
             bucket_name=folder_config.s3_bucket_name,
-            object_key=convert_path_to_s3_object_key(str(file_path), folder_config),
+            object_key=object_key,
+        )
+        self.uploaded_files[file_path].add(checksum)
+        add_to_upload_record(
+            record_file_path=self.previously_uploaded_files_record_path,
+            uploaded_file_path=file_path,
+            checksum=checksum,
+            cloud_path=f"s3://{folder_config.s3_bucket_name}/{object_key}",
         )
 
     def _process_file_event_queue(self):

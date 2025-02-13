@@ -15,7 +15,7 @@ class FolderToWatch(BaseModel, frozen=True):
     s3_bucket_name: str
     # TODO: allow truncating part of the file path prefix
     # TODO: allow deleting after upload
-    # TODO: allow specifying a wait period before upload
+    # TODO: allow specifying a wait period before upload.
     # TODO: add dict of extra key/value pairs to add as metadata to the S3 object (e.g. instrument serial number)
     # TODO: add a bool if you expect files to change and want to always fully calculate checksums even if the file path itself has already been uploaded (can substantially slow down startup time if lots of large files in the folder)
 
