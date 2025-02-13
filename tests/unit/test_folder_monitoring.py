@@ -113,7 +113,7 @@ class TestFolderMonitoring:
         self._fail_if_file_not_uploaded(file_path)
 
     @pytest.mark.xfail(
-        reason="This triggers a FileCreatedEvent...and we need to handle some short delays before uploading before supporting that...since everything triggers a file created event"
+        reason="This only triggers a FileCreatedEvent...and we need to handle some short delays before uploading before supporting that...since everything triggers a file created event"
     )
     def test_When_file_created_by_moving__Then_mock_uploaded(
         self,
