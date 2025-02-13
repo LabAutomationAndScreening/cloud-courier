@@ -3,6 +3,10 @@ from pydantic import Field
 
 SSM_PARAMETER_PREFIX = "/cloud-courier"
 SSM_PARAMETER_PREFIX_TO_ALIASES = f"{SSM_PARAMETER_PREFIX}/computer-aliases"
+CLOUDWATCH_BASE_NAMESPACE = "CloudCourier"
+CLOUDWATCH_HEARTBEAT_NAMESPACE = f"{CLOUDWATCH_BASE_NAMESPACE}/Heartbeat"
+HEARTBEAT_METRIC_NAME = "Heartbeat"
+CLOUDWATCH_INSTANCE_ID_DIMENSION_NAME = "NodeRoleName"
 
 
 class FolderToWatch(BaseModel, frozen=True):
@@ -34,3 +38,5 @@ class FolderToWatch(BaseModel, frozen=True):
 class AppConfig(BaseModel, frozen=True):
     config_format_version: str = "1.0"
     config_refresh_frequency_minutes: int = 60
+    heartbeat_frequency_seconds: int = 60
+    """If it's been this long since the last heartbeat, send another one."""

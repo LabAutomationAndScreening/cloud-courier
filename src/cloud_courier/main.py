@@ -1,4 +1,5 @@
 import argparse
+import datetime
 import logging
 import os
 import queue
@@ -20,6 +21,9 @@ from .aws_credentials import create_boto_session
 from .aws_credentials import get_role_arn
 from .cli import parser
 from .constants import Checksum
+from .courier_config_models import CLOUDWATCH_HEARTBEAT_NAMESPACE
+from .courier_config_models import CLOUDWATCH_INSTANCE_ID_DIMENSION_NAME
+from .courier_config_models import HEARTBEAT_METRIC_NAME
 from .courier_config_models import FolderToWatch
 from .load_config import CourierConfig
 from .load_config import load_config_from_aws
@@ -110,6 +114,31 @@ class MainLoop:
         self.main_loop_entered = threading.Event()  # helpful for unit testing
         create_record_file(self.previously_uploaded_files_record_path)
         self.uploaded_files = parse_upload_record(self.previously_uploaded_files_record_path)
+        self.last_heartbeat_timestamp = datetime.datetime(
+            year=1988, month=1, day=19, tzinfo=datetime.UTC
+        )  # infinitely long ago
+
+    def _send_heartbeat_if_needed(self):
+        self._send_heartbeat()
+        self.last_heartbeat_timestamp = datetime.datetime.now(tz=datetime.UTC)
+
+    def _send_heartbeat(self):
+        cloudwatch_client = self.boto_session.client("cloudwatch")
+        _ = cloudwatch_client.put_metric_data(
+            Namespace=CLOUDWATCH_HEARTBEAT_NAMESPACE,
+            MetricData=[
+                {
+                    "MetricName": HEARTBEAT_METRIC_NAME,
+                    "Dimensions": [
+                        {"Name": "Application", "Value": "CloudCourier"},
+                        {"Name": CLOUDWATCH_INSTANCE_ID_DIMENSION_NAME, "Value": self.config.role_name},
+                    ],
+                    "Timestamp": datetime.datetime.now(tz=datetime.UTC),
+                    "Value": 1,
+                    "Unit": "Count",
+                },
+            ],
+        )
 
     def _boot_up(self):
         """Perform initial activities before starting passive monitoring.
@@ -122,7 +151,7 @@ class MainLoop:
         self.config = load_config_from_aws(self.boto_session)
         # TODO: check all the folders and raise an error if any don't exist
         # TODO: implement refreshing the config
-
+        self._send_heartbeat_if_needed()
         folder_config = next(iter(self.config.folders_to_watch.values()))  # TODO: support multiple folders to search
         folder_path = Path(folder_config.folder_path)
         glob_path = "*"

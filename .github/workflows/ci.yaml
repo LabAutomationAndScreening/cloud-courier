@@ -72,6 +72,7 @@ jobs:
         env:
           AWS_ACCESS_KEY_ID: test
           AWS_SECRET_ACCESS_KEY: test
+          SERVICES: s3,sts,cloudwatch,ssm,events,iam
 
     steps:
       - name: Checkout code

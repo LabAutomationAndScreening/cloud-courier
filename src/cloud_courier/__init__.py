@@ -4,6 +4,9 @@ from . import main
 from . import upload
 from .aws_credentials import path_to_aws_credentials
 from .aws_credentials import read_aws_creds
+from .courier_config_models import CLOUDWATCH_HEARTBEAT_NAMESPACE
+from .courier_config_models import CLOUDWATCH_INSTANCE_ID_DIMENSION_NAME
+from .courier_config_models import HEARTBEAT_METRIC_NAME
 from .courier_config_models import AppConfig
 from .courier_config_models import FolderToWatch
 from .load_config import CourierConfig

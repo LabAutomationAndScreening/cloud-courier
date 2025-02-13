@@ -25,6 +25,7 @@ services:
     environment:
       # really cryptic error messages unless DEBUG is set
       - DEBUG=1
+      - SERVICES=s3,sts,cloudwatch,ssm,events,iam
 
 volumes:
   python_venv: {}
