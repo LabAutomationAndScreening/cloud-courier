@@ -53,7 +53,7 @@ jobs:
       matrix:
         os:
           - "ubuntu-24.04"
-          - windows-2022
+
         python-version:
 
           - 3.12.7
@@ -64,6 +64,14 @@ jobs:
             JOB_MATCHING_DEV_ENV: true
 
     runs-on: ${{ matrix.os }}
+    services:
+      localstack:
+        image: localstack/localstack:4.1.1
+        ports:
+          - 4566:4566
+        env:
+          AWS_ACCESS_KEY_ID: test
+          AWS_SECRET_ACCESS_KEY: test
 
     steps:
       - name: Checkout code
@@ -73,9 +81,12 @@ jobs:
         uses: ./.github/actions/install_deps_uv
         with:
           python-version: ${{ matrix.python-version }}
-
+      - name: Create AWS profile
+        run: |
+          sh .devcontainer/create-aws-profile.sh
+          cat ~/.aws/config
       - name: Unit test
-        run: uv run pytest --cov-report=xml --durations=5
+        run: uv run pytest tests/unit --cov-report=xml --durations=5
 
       - name: Upload coverage to Codecov
         # only upload coverage from fastest job
@@ -90,13 +101,44 @@ jobs:
           token: ${{ secrets.CODECOV_TOKEN }}
           slug: LabAutomationAndScreening/cloud-courier
 
+  executable:
+    needs: [ test ]
+    strategy:
+      matrix:
+        os:
+          - "ubuntu-24.04"
+          - windows-2022
+        python-version:
+
+          - 3.12.7
+
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4.2.2
+      - name: Install python tooling
+        uses: ./.github/actions/install_deps_uv
+        with:
+          python-version: ${{ matrix.python-version }}
+      - name: Build executable
+        run: uv run pyinstaller pyinstaller.spec --log-level=DEBUG
+      - name: Upload executable artifact
+        uses: actions/upload-artifact@v4.4.3
+        with:
+          name: exe-${{ matrix.os }}-${{ matrix.python-version }}
+          path: dist/
+          if-no-files-found: error
+
+
+
 
   required-check:
     runs-on: ubuntu-24.04
-    needs: [ test ]
+    needs: [ test, executable ]
     if: always()
     steps:
       - name: fail if prior job failure
-        if: needs.test.result != 'success'
+        if: needs.test.result != 'success' || needs.executable.result != 'success'
         run: |
           exit 1

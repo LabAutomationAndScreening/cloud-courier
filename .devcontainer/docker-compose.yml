@@ -15,7 +15,16 @@ services:
       - "61020:2222"
     environment:
       - AWS_PROFILE=localstack
+      - AWS_DEFAULT_REGION=
 
+  localstack:
+    image: localstack/localstack:4.1.1 # no known reason for not using newer versions, just pinning for best practice
+    container_name: localstack
+    ports:
+      - "4566:4566"  # Main edge port for all AWS service emulation
+    environment:
+      # really cryptic error messages unless DEBUG is set
+      - DEBUG=1
 
 volumes:
   python_venv: {}
