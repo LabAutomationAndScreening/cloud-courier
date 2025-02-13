@@ -1,5 +1,6 @@
 import argparse
 import logging
+import os
 import queue
 import threading
 import time
@@ -16,6 +17,7 @@ from watchdog.observers import Observer
 
 from .aws_credentials import create_boto_session
 from .aws_credentials import get_role_arn
+from .cli import parser
 from .courier_config_models import FolderToWatch
 from .load_config import CourierConfig
 from .load_config import load_config_from_aws
@@ -25,36 +27,32 @@ from .upload import upload_to_s3
 
 type Checksum = str
 logger = logging.getLogger(__name__)
-parser = argparse.ArgumentParser(description="cloud-courier", exit_on_error=False)
-_ = parser.add_argument(
-    "--aws-region",
-    required=True,
-    type=str,
-    help="The AWS Region the cloud-courier infrastructure is deployed to (e.g. us-east-1).",
-)
-_ = parser.add_argument(
-    "--immediate-shut-down",
-    action="store_true",
-    help="Shut down the system before actually doing anything meaningful. Useful for unit testing.",
-)
-_ = parser.add_argument(
-    "--use-generic-boto-session",
-    action="store_true",
-    help="Use a generic boto3 session instead of attempting to use the SSM credentials. Useful for testing.",
-)
-_ = parser.add_argument(
-    "--stop-flag-dir",
-    type=str,
-    help="The directory where the program looks for flag files (e.g. telling it to shut down).",
-    required=True,
-)
-_ = parser.add_argument(
-    "--idle-loop-sleep-seconds",
-    type=float,
-    help="The number of seconds to sleep between iterations of the main loop if there are no files to upload.",
-    default=5,
-)
-_ = parser.add_argument("--log-level", type=str, default="INFO", help="The log level to use for the logger")
+
+
+def path_to_previously_uploaded_files_record() -> Path:
+    if (
+        os.name == "nt"
+    ):  # pragma: no cover # In Linux test environments, pathlib throws an error trying to run this: cannot instantiate 'WindowsPath' on your system
+        return (
+            Path("C:\\")
+            / "ProgramData"
+            / "LabAutomationAndScreening"
+            / "CloudCourier"
+            / "previously_uploaded_files.tsv"
+        )
+    return (  # pragma: no cover # In Windows test environments, pathlib will probably throw an error about this
+        Path("~/") / ".lab_automation_and_screening" / "cloud_courier" / "previously_uploaded_files.tsv"
+    )
+
+
+def create_record_file(record_file_path: Path):
+    if record_file_path.exists():
+        return
+
+    parent_dir = record_file_path.parent
+    parent_dir.mkdir(parents=True, exist_ok=True)
+    with record_file_path.open("w") as f:
+        _ = f.write("file_path\tcloud_path\tchecksum\n")
 
 
 class EventHandler(FileSystemEventHandler):
@@ -75,7 +73,14 @@ class EventHandler(FileSystemEventHandler):
 
 
 class MainLoop:
-    def __init__(self, *, stop_flag_dir: str, boto_session: boto3.Session, idle_loop_sleep_seconds: float):
+    def __init__(
+        self,
+        *,
+        stop_flag_dir: str,
+        boto_session: boto3.Session,
+        idle_loop_sleep_seconds: float,
+        previously_uploaded_files_record_path: Path,
+    ):
         super().__init__()
         self.stop_flag_dir = Path(stop_flag_dir)
         self.boto_session = boto_session
@@ -86,6 +91,7 @@ class MainLoop:
         self.config: CourierConfig
         self.uploaded_files: dict[Path, Checksum]
         self.main_loop_entered = threading.Event()  # helpful for unit testing
+        create_record_file(previously_uploaded_files_record_path)
 
     def _boot_up(self):
         """Perform initial activities before starting passive monitoring.
@@ -168,6 +174,7 @@ def entrypoint(argv: Sequence[str]) -> int:
             stop_flag_dir=cli_args.stop_flag_dir,
             boto_session=boto_session,
             idle_loop_sleep_seconds=cli_args.idle_loop_sleep_seconds,
+            previously_uploaded_files_record_path=path_to_previously_uploaded_files_record(),
         ).run()
     except Exception:
         logger.exception("An unhandled exception occurred")

@@ -27,21 +27,28 @@ class TestFolderMonitoring:
     def _setup(self, mocker: MockerFixture):
         self.boto_session = boto3.Session(region_name=GENERIC_COURIER_CONFIG.aws_region)
         self.mocker = mocker
-        with tempfile.TemporaryDirectory() as stop_flag_dir:
-            with tempfile.TemporaryDirectory() as watch_dir:
-                self.watch_dir = watch_dir
-                self.config = deepcopy(GENERIC_COURIER_CONFIG)
-                self.config.folders_to_watch["fcs-files"] = self.config.folders_to_watch["fcs-files"].model_copy(
-                    update={"folder_path": watch_dir}
-                )
-                self.folder_config = self.config.folders_to_watch["fcs-files"]
-                _ = mocker.patch.object(main, load_config_from_aws.__name__, autospec=True, return_value=self.config)
-                self.loop = MainLoop(
-                    boto_session=self.boto_session, stop_flag_dir=stop_flag_dir, idle_loop_sleep_seconds=0.1
-                )
+        with (
+            tempfile.TemporaryDirectory() as stop_flag_dir,
+            tempfile.TemporaryDirectory() as watch_dir,
+            tempfile.TemporaryDirectory() as record_dir,
+        ):
+            self.watch_dir = watch_dir
+            self.config = deepcopy(GENERIC_COURIER_CONFIG)
+            self.config.folders_to_watch["fcs-files"] = self.config.folders_to_watch["fcs-files"].model_copy(
+                update={"folder_path": watch_dir}
+            )
+            self.folder_config = self.config.folders_to_watch["fcs-files"]
+            _ = mocker.patch.object(main, load_config_from_aws.__name__, autospec=True, return_value=self.config)
+            self.loop = MainLoop(
+                boto_session=self.boto_session,
+                stop_flag_dir=stop_flag_dir,
+                idle_loop_sleep_seconds=0.1,
+                previously_uploaded_files_record_path=Path(record_dir) / str(uuid.uuid4()) / "record.tsv",
+            )
 
-                yield
-            (Path(stop_flag_dir) / str(uuid.uuid4())).mkdir()
+            yield
+
+            (Path(stop_flag_dir) / str(uuid.uuid4())).mkdir(parents=True)
             flag_file = Path(stop_flag_dir) / f"{uuid.uuid4()}.txt"
 
             flag_file.touch()
