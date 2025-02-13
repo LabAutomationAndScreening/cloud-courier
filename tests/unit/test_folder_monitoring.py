@@ -12,6 +12,9 @@ import pytest
 from pytest_mock import MockerFixture
 
 from cloud_courier import MainLoop
+from cloud_courier import add_to_upload_record
+from cloud_courier import calculate_aws_checksum
+from cloud_courier import create_record_file
 from cloud_courier import load_config_from_aws
 from cloud_courier import main
 from cloud_courier import parse_upload_record
@@ -34,6 +37,7 @@ class MainLoopMixin:
             tempfile.TemporaryDirectory() as record_dir,
         ):
             self.watch_dir = watch_dir
+            self.stop_flag_dir = stop_flag_dir
             self.config = deepcopy(GENERIC_COURIER_CONFIG)
             self.config.folders_to_watch["fcs-files"] = self.config.folders_to_watch["fcs-files"].model_copy(
                 update={"folder_path": watch_dir}
@@ -41,12 +45,6 @@ class MainLoopMixin:
             self.folder_config = self.config.folders_to_watch["fcs-files"]
             _ = mocker.patch.object(main, load_config_from_aws.__name__, autospec=True, return_value=self.config)
             self.upload_record_file_path = Path(record_dir) / str(uuid.uuid4()) / "record.tsv"
-            self.loop = MainLoop(
-                boto_session=self.boto_session,
-                stop_flag_dir=stop_flag_dir,
-                idle_loop_sleep_seconds=0.1,
-                previously_uploaded_files_record_path=self.upload_record_file_path,
-            )
 
             yield
 
@@ -59,6 +57,13 @@ class MainLoopMixin:
         assert self.thread.is_alive() is False
 
     def _start_loop(self, *, mock_upload_to_s3: bool = True):
+        self.spied_upload_file = self.mocker.spy(MainLoop, "_upload_file")
+        self.loop = MainLoop(
+            boto_session=self.boto_session,
+            stop_flag_dir=self.stop_flag_dir,
+            idle_loop_sleep_seconds=0.1,
+            previously_uploaded_files_record_path=self.upload_record_file_path,
+        )
         if mock_upload_to_s3:
             _ = self.mocker.patch.object(main, upload_to_s3.__name__, autospec=True, return_value=str(uuid.uuid4()))
         self.thread = Thread(
@@ -75,6 +80,12 @@ class MainLoopMixin:
     def _fail_if_file_uploaded(self, file_path: Path):
         for _ in range(200):
             if file_path in self.loop.uploaded_files:
+                pytest.fail("File was uploaded")
+            time.sleep(0.01)
+
+    def _fail_if_any_file_uploaded(self):
+        for _ in range(200):
+            if self.spied_upload_file.call_count > 0:
                 pytest.fail("File was uploaded")
             time.sleep(0.01)
 
@@ -181,7 +192,6 @@ class TestInitialFolderSearch(MainLoopMixin):
         self._start_loop()
 
         self._fail_if_file_not_uploaded(file_path)
-
         uploaded_files = parse_upload_record(self.upload_record_file_path)
         assert file_path in uploaded_files
 
@@ -200,3 +210,19 @@ class TestInitialFolderSearch(MainLoopMixin):
         self._start_loop()
 
         self._fail_if_file_uploaded(file_path)
+
+    def test_Given_file_already_in_uploaded_list__Then_no_upload(self):
+        file_path = Path(self.watch_dir) / f"{uuid.uuid4()}.txt"
+        with file_path.open("w") as file:
+            _ = file.write("test")
+        create_record_file(self.upload_record_file_path)
+        add_to_upload_record(
+            record_file_path=self.upload_record_file_path,
+            uploaded_file_path=file_path,
+            checksum=calculate_aws_checksum(file_path),
+            cloud_path=str(uuid.uuid4()),
+        )
+
+        self._start_loop()
+
+        self._fail_if_any_file_uploaded()

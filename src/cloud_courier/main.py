@@ -64,7 +64,9 @@ def add_to_upload_record(*, record_file_path: Path, uploaded_file_path: Path, ch
 def parse_upload_record(record_file_path: Path) -> dict[Path, set[Checksum]]:
     uploaded_files: dict[Path, set[Checksum]] = defaultdict(set)
     with record_file_path.open("r") as f:
-        for line in f:
+        for line_idx, line in enumerate(f):
+            if line_idx == 0:
+                continue  # skip header
             file_path, _, checksum = line.strip().split("\t")
             uploaded_files[Path(file_path)].add(checksum)
     return uploaded_files
@@ -105,9 +107,9 @@ class MainLoop:
         self.observers: list[Observer] = []  # type: ignore[reportInvalidTypeForm] # pyright doesn't seem to like Observer
         self.event_handler: EventHandler
         self.config: CourierConfig
-        self.uploaded_files: dict[Path, set[Checksum]] = defaultdict(set)
         self.main_loop_entered = threading.Event()  # helpful for unit testing
         create_record_file(self.previously_uploaded_files_record_path)
+        self.uploaded_files = parse_upload_record(self.previously_uploaded_files_record_path)
 
     def _boot_up(self):
         """Perform initial activities before starting passive monitoring.
@@ -155,7 +157,11 @@ class MainLoop:
         assert isinstance(event.src_path, str), (
             f"Expected event.src_path to be a string, but got {event.src_path} of type {type(event.src_path)}"
         )
-        self._upload_file(Path(event.src_path), folder_config)
+        file_path = Path(event.src_path)
+        if file_path in self.uploaded_files:
+            logger.info(f"Skipping {file_path} because it has already been uploaded")
+            return  # TODO: decide how to handle changes to the file that alter the checksum
+        self._upload_file(file_path, folder_config)
 
     def run(self) -> int:
         self._boot_up()
@@ -168,8 +174,8 @@ class MainLoop:
             recursive=folder_config.recursive,
         )
         self.observers[0].start()  # type: ignore[reportUnknownMemberType] # pyright doesn't seem to like Observer
+        self.main_loop_entered.set()
         while True:
-            self.main_loop_entered.set()
             if any(
                 item.is_file() for item in self.stop_flag_dir.iterdir()
             ):  # TODO: maybe use a separate observer for the stop file
