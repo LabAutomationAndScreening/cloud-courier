@@ -1,3 +1,5 @@
+import datetime
+import random
 import shutil
 import tempfile
 import time
@@ -6,6 +8,7 @@ from pathlib import Path
 from unittest.mock import ANY
 
 import pytest
+import time_machine
 
 from cloud_courier import add_to_upload_record
 from cloud_courier import calculate_aws_checksum
@@ -139,6 +142,51 @@ class TestFolderMonitoring(MainLoopMixin):
         time.sleep(0.1)  # wait a tiny bit extra after no more events in queue for last one to be processed
 
         assert self.spied_upload_file.call_count == 1
+
+    def test_Given_specified_delay_prior_to_upload__Then_not_uploaded_until_time_condition_met(
+        self,
+    ):
+        file_path = Path(self.watch_dir) / f"{uuid.uuid4()}.txt"
+        delay_seconds_before_upload = random.randint(10, 50)
+        self.config.folders_to_watch["fcs-files"] = self.config.folders_to_watch["fcs-files"].model_copy(
+            update={"delay_seconds_before_upload": delay_seconds_before_upload}
+        )
+        with time_machine.travel("2025-02-19 08:00:00", tick=False) as traveller:
+            self._start_loop(create_duplicate_event_stream_for_test_monitoring=True)
+            with file_path.open("w") as file:
+                _ = file.write("test")
+
+            # confirm an event was triggered
+            for _ in range(200):
+                if self.loop.file_system_events_for_test_monitoring.qsize() >= 0:
+                    break
+                time.sleep(0.01)
+            assert self.loop.file_system_events_for_test_monitoring.qsize() >= 0
+
+            self._wait_for_loop_iterations(2)  # wait for a potential upload to occur
+
+            assert self.spied_upload_file.call_count == 0
+
+            traveller.shift(datetime.timedelta(seconds=delay_seconds_before_upload + 1))
+
+            self._wait_for_loop_iterations(2)  # wait for a potential upload to occur
+
+            assert self.spied_upload_file.call_count == 1
+
+    def test_When_loop_run_for_large_number_of_iterations__Then_loop_counter_eventually_resets_and_does_not_overflow(
+        self,
+    ):
+        arbitrary_num_iterations = 5  # wait for an arbitrary number of iterations to confirm the loop counter rolled around past zero (but enough above zero that the loop won't zoom right past it without being detected)
+        self._start_loop()
+
+        self._wait_for_loop_iterations(arbitrary_num_iterations + 1)
+        assert self.loop.num_loop_iterations >= arbitrary_num_iterations
+        for _ in range(20000):
+            if self.loop.num_loop_iterations < arbitrary_num_iterations:
+                break
+            time.sleep(0.01)
+        else:
+            pytest.fail("Loop counter never reset")
 
 
 class TestInitialFolderSearch(MainLoopMixin):

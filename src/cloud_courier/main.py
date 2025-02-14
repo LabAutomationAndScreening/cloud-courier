@@ -37,6 +37,7 @@ from .logger_config import configure_logging
 from .upload import convert_path_to_s3_object_key
 from .upload import upload_to_s3
 
+RESET_POINT_FOR_LOOP_ITERATION_COUNTER = 20  # this is only for assertions in unit tests, so just reset the value if it gets arbitrarily high so that it doesn't cause an overflow when running in production
 logger = logging.getLogger(__name__)
 
 
@@ -140,6 +141,7 @@ class MainLoop:
         create_duplicate_event_stream_for_test_monitoring: bool = False,
     ):
         super().__init__()
+        self.num_loop_iterations = 0
         self.create_duplicate_event_stream_for_test_monitoring = create_duplicate_event_stream_for_test_monitoring
         self.previously_uploaded_files_record_path = previously_uploaded_files_record_path
         self.stop_flag_dir = Path(stop_flag_dir)
@@ -230,10 +232,21 @@ class MainLoop:
 
     def _process_file_event_queue(self):
         try:
-            event_info = self.file_system_events.get(timeout=0.5)
+            event_info = self.file_system_events.get(timeout=0.05)
         except queue.Empty:
             return
         event = event_info.file_system_event
+
+        seconds_since_event = (datetime.datetime.now(tz=datetime.UTC) - event_info.timestamp).total_seconds()
+        if seconds_since_event < event_info.folder_config.delay_seconds_before_upload:
+            logger.info(
+                f"Skipping {event.src_path} because it was created less than {event_info.folder_config.delay_seconds_before_upload} seconds ago"
+            )
+            self.file_system_events.put(
+                event_info
+            )  # put it back in the queue to check again later if enough time has elapsed
+            return
+
         assert isinstance(event.src_path, str), (
             f"Expected event.src_path to be a string, but got {event.src_path} of type {type(event.src_path)}"
         )
@@ -275,6 +288,9 @@ class MainLoop:
             self._process_file_event_queue()
 
             self._idle_loop_sleep()
+            self.num_loop_iterations += 1
+            if self.num_loop_iterations > RESET_POINT_FOR_LOOP_ITERATION_COUNTER:
+                self.num_loop_iterations = 0
         self.observers[0].stop()  # type: ignore[reportUnknownMemberType] # pyright doesn't seem to like Observer
         self.observers[0].join()  # type: ignore[reportUnknownMemberType] # pyright doesn't seem to like Observer
         return 0

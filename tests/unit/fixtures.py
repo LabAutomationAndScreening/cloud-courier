@@ -12,6 +12,7 @@ from pytest_mock import MockerFixture
 from cloud_courier import CourierConfig
 from cloud_courier import MainLoop
 from cloud_courier import aws_credentials
+from cloud_courier import get_role_arn
 from cloud_courier import load_config_from_aws
 from cloud_courier import main
 from cloud_courier import upload_to_s3
@@ -76,6 +77,9 @@ class MainLoopMixin:
             )
             self.folder_config = self.config.folders_to_watch["fcs-files"]
             _ = mocker.patch.object(main, load_config_from_aws.__name__, autospec=True, return_value=self.config)
+            _ = mocker.patch.object(
+                main, get_role_arn.__name__, autospec=True, return_value="arn:aws:iam::000000000000:role/role_name"
+            )
             self.upload_record_file_path = Path(record_dir) / str(uuid.uuid4()) / "record.tsv"
 
             yield
@@ -137,3 +141,14 @@ class MainLoopMixin:
             time.sleep(0.01)
         else:
             pytest.fail("File was not uploaded")
+
+    def _wait_for_loop_iterations(self, num_iterations: int, num_loops_before_timeout: int = 2000):
+        starting_num = self.loop.num_loop_iterations
+        for _ in range(num_loops_before_timeout):
+            if self.loop.num_loop_iterations >= starting_num + num_iterations:
+                break
+            time.sleep(0.01)
+        else:
+            pytest.fail(
+                f"Loop never reached {num_iterations} additional iterations. It started at {starting_num} and only reached {self.loop.num_loop_iterations}"
+            )
