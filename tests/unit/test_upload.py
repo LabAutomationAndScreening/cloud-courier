@@ -10,11 +10,25 @@ from cloud_courier import MIN_MULTIPART_BYTES
 from cloud_courier import ChecksumMismatchError
 from cloud_courier import FolderToWatch
 from cloud_courier import convert_path_to_s3_object_key
+from cloud_courier import convert_path_to_s3_object_tag
 from cloud_courier import dummy_function_during_multipart_upload
 from cloud_courier import upload
 from cloud_courier import upload_to_s3
 
 from .constants import PATH_TO_EXAMPLE_DATA_FILES
+
+
+@pytest.mark.parametrize(
+    ("original_file_path", "expected"),
+    [
+        pytest.param(r"C:\blah\something.txt", "C/blah/something.txt", id="remove colon and swap slashes"),
+        pytest.param("b" + "a" * 256, "a" * 256, id="when too long, then only take final 256 characters"),
+    ],
+)
+def test_make_path_safe_for_s3_object_tag(original_file_path: str, expected: str):
+    actual = convert_path_to_s3_object_tag(original_file_path)
+
+    assert actual == expected
 
 
 class TestUploadToS3:
@@ -117,7 +131,10 @@ class TestUploadToS3:
         object_key = str(uuid.uuid4())
         num_default_tags = 4
         with tempfile.TemporaryDirectory() as temp_dir:
-            file_path = Path(temp_dir) / str(uuid.uuid4())
+            file_path = (
+                Path(temp_dir) / f"{'a' * 250}" / str(uuid.uuid4())
+            )  # really long file path, to trigger the truncation for the S3 Object Tag
+            file_path.parent.mkdir(parents=True)
             with file_path.open("wb") as f:
                 _ = f.write(b"0" * 10)
                 f.flush()
@@ -133,7 +150,7 @@ class TestUploadToS3:
             tags = response.get("TagSet", [])
             assert len(tags) == num_default_tags
             assert {"Key": "uploaded-by", "Value": "cloud-courier"} in tags
-            assert {"Key": "original-file-path", "Value": str(file_path)} in tags
+            assert {"Key": "original-file-path", "Value": str(file_path)[-256:]} in tags
             found_last_modified = False
             found_created = False
             for tag in tags:

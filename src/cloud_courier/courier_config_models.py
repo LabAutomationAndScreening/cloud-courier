@@ -1,8 +1,14 @@
+"""Models for the Cloud Courier configuration which are shared between the application and infrastructure code."""
+
 from pydantic import BaseModel
 from pydantic import Field
 
 SSM_PARAMETER_PREFIX = "/cloud-courier"
 SSM_PARAMETER_PREFIX_TO_ALIASES = f"{SSM_PARAMETER_PREFIX}/computer-aliases"
+CLOUDWATCH_BASE_NAMESPACE = "CloudCourier"
+CLOUDWATCH_HEARTBEAT_NAMESPACE = f"{CLOUDWATCH_BASE_NAMESPACE}/Heartbeat"
+HEARTBEAT_METRIC_NAME = "Heartbeat"
+CLOUDWATCH_INSTANCE_ID_DIMENSION_NAME = "NodeRoleName"
 
 
 class FolderToWatch(BaseModel, frozen=True):
@@ -13,10 +19,12 @@ class FolderToWatch(BaseModel, frozen=True):
     ignore_patterns: list[str] = Field(default_factory=list)  # TODO: implement
     s3_key_prefix: str
     s3_bucket_name: str
+    delay_seconds_before_upload: float = 10
     # TODO: allow truncating part of the file path prefix
     # TODO: allow deleting after upload
-    # TODO: allow specifying a wait period before upload
+    # TODO: allow specifying a wait period before upload.
     # TODO: add dict of extra key/value pairs to add as metadata to the S3 object (e.g. instrument serial number)
+    # TODO: add a bool if you expect files to change and want to always fully calculate checksums even if the file path itself has already been uploaded (can substantially slow down startup time if lots of large files in the folder)
 
 
 # TODO: check the whole list of folders to watch and confirm there's no overlaps
@@ -33,3 +41,5 @@ class FolderToWatch(BaseModel, frozen=True):
 class AppConfig(BaseModel, frozen=True):
     config_format_version: str = "1.0"
     config_refresh_frequency_minutes: int = 60
+    heartbeat_frequency_seconds: int = 60
+    """If it's been this long since the last heartbeat, send another one."""

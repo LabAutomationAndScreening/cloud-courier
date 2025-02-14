@@ -38,6 +38,11 @@ def convert_path_to_s3_object_key(file_path: str, folder_config: FolderToWatch) 
     return f"{folder_config.s3_key_prefix}/{file_path}"
 
 
+def convert_path_to_s3_object_tag(file_path: str) -> str:
+    # https://docs.aws.amazon.com/AmazonS3/latest/userguide/object-tagging.html
+    return file_path.replace(":", "").replace("\\", "/")[-256:]
+
+
 def calculate_aws_checksum(file_path: Path, part_size_bytes: int = MIN_MULTIPART_BYTES) -> str:
     is_multi_part, part_size_bytes = _get_part_size(file_path, part_size_bytes)
     md5_list: list[bytes] = []
@@ -117,13 +122,14 @@ def upload_to_s3(
     # Creation time on Windows (st_ctime). On Linux, this is metadata change time.
     creation_time = datetime.datetime.fromtimestamp(file_stats.st_ctime, tz=datetime.UTC).isoformat()
     # TODO: add custom tags specified by the config
+    # TODO: catch client error and log the attempted tag keys/values for easier troubleshooting---botocore.exceptions.ClientError: An error occurred (InvalidTag) when calling the PutObjectTagging operation: The TagValue you have provided is invalid
     _ = s3_client.put_object_tagging(
         Bucket=bucket_name,
         Key=object_key,
         Tagging={
             "TagSet": [
                 {"Key": "uploaded-by", "Value": "cloud-courier"},
-                {"Key": "original-file-path", "Value": str(file_path)},
+                {"Key": "original-file-path", "Value": convert_path_to_s3_object_tag(str(file_path))},
                 {"Key": "file-last-modified-at", "Value": last_modified_time},
                 {"Key": "file-created-at", "Value": creation_time},
             ]

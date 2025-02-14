@@ -1,80 +1,29 @@
+import datetime
+import random
 import shutil
 import tempfile
 import time
 import uuid
-from copy import deepcopy
 from pathlib import Path
-from threading import Thread
 from unittest.mock import ANY
 
-import boto3
 import pytest
-from pytest_mock import MockerFixture
+import time_machine
 
-from cloud_courier import MainLoop
-from cloud_courier import load_config_from_aws
+from cloud_courier import add_to_upload_record
+from cloud_courier import calculate_aws_checksum
+from cloud_courier import create_record_file
 from cloud_courier import main
+from cloud_courier import parse_upload_record
 from cloud_courier import upload_to_s3
 
-from .constants import GENERIC_COURIER_CONFIG
+from .fixtures import MainLoopMixin
 from .fixtures import mocked_generic_config
 
 _fixtures = (mocked_generic_config,)
 
 
-class TestFolderMonitoring:
-    @pytest.fixture(autouse=True)
-    def _setup(self, mocker: MockerFixture):
-        self.boto_session = boto3.Session(region_name=GENERIC_COURIER_CONFIG.aws_region)
-        self.mocker = mocker
-        with tempfile.TemporaryDirectory() as stop_flag_dir:
-            with tempfile.TemporaryDirectory() as watch_dir:
-                self.watch_dir = watch_dir
-                self.config = deepcopy(GENERIC_COURIER_CONFIG)
-                self.config.folders_to_watch["fcs-files"] = self.config.folders_to_watch["fcs-files"].model_copy(
-                    update={"folder_path": watch_dir}
-                )
-                self.folder_config = self.config.folders_to_watch["fcs-files"]
-                _ = mocker.patch.object(main, load_config_from_aws.__name__, autospec=True, return_value=self.config)
-                self.loop = MainLoop(
-                    boto_session=self.boto_session, stop_flag_dir=stop_flag_dir, idle_loop_sleep_seconds=0.1
-                )
-
-                yield
-            (Path(stop_flag_dir) / str(uuid.uuid4())).mkdir()
-            flag_file = Path(stop_flag_dir) / f"{uuid.uuid4()}.txt"
-
-            flag_file.touch()
-            self.thread.join(timeout=5)
-
-        assert self.thread.is_alive() is False
-
-    def _start_loop(self):
-        self.thread = Thread(
-            target=self.loop.run,
-        )
-        self.thread.start()
-        for _ in range(50):
-            if self.loop.main_loop_entered.is_set():
-                break
-            time.sleep(0.01)
-        else:
-            pytest.fail("Loop never entered")
-
-    def _fail_if_file_uploaded(self, file_path: Path):
-        for _ in range(200):
-            if file_path in self.loop.uploaded_files:
-                pytest.fail("File was uploaded")
-            time.sleep(0.01)
-
-    def _fail_if_file_not_uploaded(self, file_path: Path):
-        for _ in range(50):
-            if file_path in self.loop.uploaded_files:
-                break
-            time.sleep(0.01)
-        else:
-            pytest.fail("File was not uploaded")
-
+class TestFolderMonitoring(MainLoopMixin):
     def test_When_file_created_by_opening_and_closing__Then_mock_uploaded_with_correct_args_and_added_to_internal_memory(
         self,
     ):
@@ -83,7 +32,7 @@ class TestFolderMonitoring:
         mocked_upload_to_s3 = self.mocker.patch.object(
             main, upload_to_s3.__name__, autospec=True, return_value=expected_checksum
         )
-        self._start_loop()
+        self._start_loop(mock_upload_to_s3=False)
 
         with file_path.open("w") as file:
             _ = file.write("test")
@@ -105,16 +54,24 @@ class TestFolderMonitoring:
                 _ = file.write("test")
 
             file_path = Path(self.watch_dir) / f"{uuid.uuid4()}.txt"
-            expected_checksum = str(uuid.uuid4())
-            _ = self.mocker.patch.object(main, upload_to_s3.__name__, autospec=True, return_value=expected_checksum)
             self._start_loop()
             shutil.copy(original_file_path, file_path)
 
         self._fail_if_file_not_uploaded(file_path)
 
-    @pytest.mark.xfail(
-        reason="This triggers a FileCreatedEvent...and we need to handle some short delays before uploading before supporting that...since everything triggers a file created event"
-    )
+    def test_When_info_appended_to_file__Then_mock_uploaded(
+        self,
+    ):
+        file_path = Path(self.watch_dir) / f"{uuid.uuid4()}.txt"
+        with file_path.open("w") as file:
+            _ = file.write("test")
+
+        self._start_loop()
+        with file_path.open("a") as file:
+            _ = file.write("test")
+
+        self._fail_if_file_not_uploaded(file_path)
+
     def test_When_file_created_by_moving__Then_mock_uploaded(
         self,
     ):
@@ -124,8 +81,6 @@ class TestFolderMonitoring:
                 _ = file.write("test")
 
             file_path = Path(self.watch_dir) / f"{uuid.uuid4()}.txt"
-            expected_checksum = str(uuid.uuid4())
-            _ = self.mocker.patch.object(main, upload_to_s3.__name__, autospec=True, return_value=expected_checksum)
             self._start_loop()
             shutil.move(original_file_path, file_path)
 
@@ -134,11 +89,12 @@ class TestFolderMonitoring:
     def test_Given_folder_config_includes_subfolders__When_file_created_in_subfolder__Then_mock_uploaded(self):
         assert self.folder_config.recursive is True
         sub_dir = Path(self.watch_dir) / str(uuid.uuid4())
-        sub_dir.mkdir(parents=True, exist_ok=True)
         file_path = sub_dir / f"{uuid.uuid4()}.txt"
-        _ = self.mocker.patch.object(main, upload_to_s3.__name__, autospec=True, return_value=str(uuid.uuid4()))
-        self._start_loop()
 
+        self._start_loop()
+        sub_dir.mkdir(  # make directory after starting loop to exercise that DirCreatedEvent is successfully ignored
+            parents=True, exist_ok=True
+        )
         with file_path.open("w") as file:
             _ = file.write("test")
 
@@ -151,10 +107,133 @@ class TestFolderMonitoring:
         sub_dir = Path(self.watch_dir) / str(uuid.uuid4())
         sub_dir.mkdir(parents=True, exist_ok=True)
         file_path = sub_dir / f"{uuid.uuid4()}.txt"
-        _ = self.mocker.patch.object(main, upload_to_s3.__name__, autospec=True, return_value=str(uuid.uuid4()))
         self._start_loop()
 
         with file_path.open("w") as file:
             _ = file.write("test")
 
         self._fail_if_file_uploaded(file_path)
+
+    def test_When_multiple_file_system_events_triggered_in_rapid_succession__Then_only_single_upload(
+        self,
+    ):
+        file_path = Path(self.watch_dir) / f"{uuid.uuid4()}.txt"
+        min_expected_events = 3
+        with file_path.open("w") as file:
+            _ = file.write("test")
+
+        self._start_loop(create_duplicate_event_stream_for_test_monitoring=True)
+        with file_path.open("a") as file:
+            _ = file.write("test")
+
+        # confirm multiple events were triggered
+        for _ in range(200):
+            if self.loop.file_system_events_for_test_monitoring.qsize() >= min_expected_events:
+                break
+            time.sleep(0.01)
+        assert self.loop.file_system_events_for_test_monitoring.qsize() >= min_expected_events
+
+        for _ in range(200):
+            if self.loop.file_system_events.empty():
+                break
+            time.sleep(0.01)
+        else:
+            pytest.fail("Event queue never became empty")
+        time.sleep(0.1)  # wait a tiny bit extra after no more events in queue for last one to be processed
+
+        assert self.spied_upload_file.call_count == 1
+
+    def test_Given_specified_delay_prior_to_upload__Then_not_uploaded_until_time_condition_met(
+        self,
+    ):
+        file_path = Path(self.watch_dir) / f"{uuid.uuid4()}.txt"
+        delay_seconds_before_upload = random.randint(10, 50)
+        self.config.folders_to_watch["fcs-files"] = self.config.folders_to_watch["fcs-files"].model_copy(
+            update={"delay_seconds_before_upload": delay_seconds_before_upload}
+        )
+        with time_machine.travel("2025-02-19 08:00:00", tick=False) as traveller:
+            self._start_loop(create_duplicate_event_stream_for_test_monitoring=True)
+            with file_path.open("w") as file:
+                _ = file.write("test")
+
+            # confirm an event was triggered
+            for _ in range(200):
+                if self.loop.file_system_events_for_test_monitoring.qsize() >= 0:
+                    break
+                time.sleep(0.01)
+            assert self.loop.file_system_events_for_test_monitoring.qsize() >= 0
+
+            self._wait_for_loop_iterations(2)  # wait for a potential upload to occur
+
+            assert self.spied_upload_file.call_count == 0
+
+            traveller.shift(datetime.timedelta(seconds=delay_seconds_before_upload + 1))
+
+            self._wait_for_loop_iterations(2)  # wait for a potential upload to occur
+
+            assert self.spied_upload_file.call_count == 1
+
+    def test_When_loop_run_for_large_number_of_iterations__Then_loop_counter_eventually_resets_and_does_not_overflow(
+        self,
+    ):
+        arbitrary_num_iterations = 5  # wait for an arbitrary number of iterations to confirm the loop counter rolled around past zero (but enough above zero that the loop won't zoom right past it without being detected)
+        self._start_loop()
+
+        self._wait_for_loop_iterations(arbitrary_num_iterations + 1)
+        assert self.loop.num_loop_iterations >= arbitrary_num_iterations
+        for _ in range(20000):
+            if self.loop.num_loop_iterations < arbitrary_num_iterations:
+                break
+            time.sleep(0.01)
+        else:
+            pytest.fail("Loop counter never reset")
+
+
+class TestInitialFolderSearch(MainLoopMixin):
+    def test_Given_folder_config_includes_subfolders__When_file_initially_exists_in_subfolders__Then_file_mock_uploaded_and_added_to_upload_record(
+        self,
+    ):
+        assert self.folder_config.recursive is True
+        sub_dir = Path(self.watch_dir) / str(uuid.uuid4())
+        sub_dir.mkdir(parents=True, exist_ok=True)
+        file_path = sub_dir / f"{uuid.uuid4()}.txt"
+        with file_path.open("w") as file:
+            _ = file.write("test")
+
+        self._start_loop()
+
+        self._fail_if_file_not_uploaded(file_path)
+        uploaded_files = parse_upload_record(self.upload_record_file_path)
+        assert file_path in uploaded_files
+
+    def test_Given_folder_config_does_not_include_subfolders__When_file_initially_exists_in_subfolders__Then_no_upload(
+        self,
+    ):
+        self.config.folders_to_watch["fcs-files"] = self.config.folders_to_watch["fcs-files"].model_copy(
+            update={"recursive": False}
+        )
+        sub_dir = Path(self.watch_dir) / str(uuid.uuid4())
+        sub_dir.mkdir(parents=True, exist_ok=True)
+        file_path = sub_dir / f"{uuid.uuid4()}.txt"
+        with file_path.open("w") as file:
+            _ = file.write("test")
+
+        self._start_loop()
+
+        self._fail_if_file_uploaded(file_path)
+
+    def test_Given_file_already_in_uploaded_list__Then_no_upload(self):
+        file_path = Path(self.watch_dir) / f"{uuid.uuid4()}.txt"
+        with file_path.open("w") as file:
+            _ = file.write("test")
+        create_record_file(self.upload_record_file_path)
+        add_to_upload_record(
+            record_file_path=self.upload_record_file_path,
+            uploaded_file_path=file_path,
+            checksum=calculate_aws_checksum(file_path),
+            cloud_path=str(uuid.uuid4()),
+        )
+
+        self._start_loop()
+
+        self._fail_if_any_file_uploaded()
