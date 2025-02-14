@@ -133,13 +133,37 @@ jobs:
 
 
 
+  build-docs:
+    needs: [ lint ]
+    strategy:
+      matrix:
+        python-version:
+
+          - 3.12.7
+
+
+    runs-on: ubuntu-24.04
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4.2.2
+
+      - name: Install python tooling
+        uses: ./.github/actions/install_deps_uv
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Build docs
+        working-directory: ./docs
+        run: uv run make html SPHINXOPTS="-W"
+
 
   required-check:
     runs-on: ubuntu-24.04
-    needs: [ test, executable ]
+    needs: [ test, build-docs, executable ]
     if: always()
     steps:
       - name: fail if prior job failure
-        if: needs.test.result != 'success' || needs.executable.result != 'success'
+        if: needs.test.result != 'success' || needs.build-docs.result != 'success' || needs.executable.result != 'success'
         run: |
           exit 1
