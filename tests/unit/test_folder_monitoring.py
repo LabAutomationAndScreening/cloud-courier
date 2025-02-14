@@ -69,9 +69,6 @@ class TestFolderMonitoring(MainLoopMixin):
 
         self._fail_if_file_not_uploaded(file_path)
 
-    @pytest.mark.xfail(
-        reason="This only triggers a FileCreatedEvent...and we need to handle some short delays before uploading before supporting that...since everything triggers a file created event"
-    )
     def test_When_file_created_by_moving__Then_mock_uploaded(
         self,
     ):
@@ -89,10 +86,12 @@ class TestFolderMonitoring(MainLoopMixin):
     def test_Given_folder_config_includes_subfolders__When_file_created_in_subfolder__Then_mock_uploaded(self):
         assert self.folder_config.recursive is True
         sub_dir = Path(self.watch_dir) / str(uuid.uuid4())
-        sub_dir.mkdir(parents=True, exist_ok=True)
         file_path = sub_dir / f"{uuid.uuid4()}.txt"
-        self._start_loop()
 
+        self._start_loop()
+        sub_dir.mkdir(  # make directory after starting loop to exercise that DirCreatedEvent is successfully ignored
+            parents=True, exist_ok=True
+        )
         with file_path.open("w") as file:
             _ = file.write("test")
 
