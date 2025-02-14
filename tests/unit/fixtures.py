@@ -88,13 +88,20 @@ class MainLoopMixin:
 
         assert self.thread.is_alive() is False
 
-    def _start_loop(self, *, mock_upload_to_s3: bool = True, mock_send_heartbeat: bool = True):
+    def _start_loop(
+        self,
+        *,
+        mock_upload_to_s3: bool = True,
+        mock_send_heartbeat: bool = True,
+        create_duplicate_event_stream_for_test_monitoring: bool = False,
+    ):
         self.spied_upload_file = self.mocker.spy(MainLoop, "_upload_file")
         self.loop = MainLoop(
             boto_session=self.boto_session,
             stop_flag_dir=self.stop_flag_dir,
-            idle_loop_sleep_seconds=0.1,
+            idle_loop_sleep_seconds=0.01,
             previously_uploaded_files_record_path=self.upload_record_file_path,
+            create_duplicate_event_stream_for_test_monitoring=create_duplicate_event_stream_for_test_monitoring,
         )
         if mock_upload_to_s3:
             _ = self.mocker.patch.object(main, upload_to_s3.__name__, autospec=True, return_value=str(uuid.uuid4()))
@@ -124,7 +131,7 @@ class MainLoopMixin:
             time.sleep(0.01)
 
     def _fail_if_file_not_uploaded(self, file_path: Path):
-        for _ in range(50):
+        for _ in range(100):
             if file_path in self.loop.uploaded_files:
                 break
             time.sleep(0.01)

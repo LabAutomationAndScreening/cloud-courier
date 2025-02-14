@@ -1,5 +1,6 @@
 import shutil
 import tempfile
+import time
 import uuid
 from pathlib import Path
 from unittest.mock import ANY
@@ -55,6 +56,19 @@ class TestFolderMonitoring(MainLoopMixin):
 
         self._fail_if_file_not_uploaded(file_path)
 
+    def test_When_info_appended_to_file__Then_mock_uploaded(
+        self,
+    ):
+        file_path = Path(self.watch_dir) / f"{uuid.uuid4()}.txt"
+        with file_path.open("w") as file:
+            _ = file.write("test")
+
+        self._start_loop()
+        with file_path.open("a") as file:
+            _ = file.write("test")
+
+        self._fail_if_file_not_uploaded(file_path)
+
     @pytest.mark.xfail(
         reason="This only triggers a FileCreatedEvent...and we need to handle some short delays before uploading before supporting that...since everything triggers a file created event"
     )
@@ -97,6 +111,35 @@ class TestFolderMonitoring(MainLoopMixin):
             _ = file.write("test")
 
         self._fail_if_file_uploaded(file_path)
+
+    def test_When_multiple_file_system_events_triggered_in_rapid_succession__Then_only_single_upload(
+        self,
+    ):
+        file_path = Path(self.watch_dir) / f"{uuid.uuid4()}.txt"
+        min_expected_events = 3
+        with file_path.open("w") as file:
+            _ = file.write("test")
+
+        self._start_loop(create_duplicate_event_stream_for_test_monitoring=True)
+        with file_path.open("a") as file:
+            _ = file.write("test")
+
+        # confirm multiple events were triggered
+        for _ in range(200):
+            if self.loop.file_system_events_for_test_monitoring.qsize() >= min_expected_events:
+                break
+            time.sleep(0.01)
+        assert self.loop.file_system_events_for_test_monitoring.qsize() >= min_expected_events
+
+        for _ in range(200):
+            if self.loop.file_system_events.empty():
+                break
+            time.sleep(0.01)
+        else:
+            pytest.fail("Event queue never became empty")
+        time.sleep(0.1)  # wait a tiny bit extra after no more events in queue for last one to be processed
+
+        assert self.spied_upload_file.call_count == 1
 
 
 class TestInitialFolderSearch(MainLoopMixin):

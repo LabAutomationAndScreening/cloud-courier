@@ -12,7 +12,13 @@ from queue import SimpleQueue
 from typing import override
 
 import boto3
+from pydantic import BaseModel
+from pydantic import Field
+from watchdog.events import DirCreatedEvent
+from watchdog.events import DirModifiedEvent
 from watchdog.events import FileClosedEvent
+from watchdog.events import FileCreatedEvent
+from watchdog.events import FileModifiedEvent
 from watchdog.events import FileSystemEvent
 from watchdog.events import FileSystemEventHandler
 from watchdog.observers import Observer
@@ -32,6 +38,12 @@ from .upload import convert_path_to_s3_object_key
 from .upload import upload_to_s3
 
 logger = logging.getLogger(__name__)
+
+
+class FileEventInfo(BaseModel, frozen=True):
+    file_system_event: FileSystemEvent
+    folder_config: FolderToWatch
+    timestamp: datetime.datetime = Field(default_factory=lambda: datetime.datetime.now(tz=datetime.UTC))
 
 
 def path_to_previously_uploaded_files_record() -> Path:
@@ -78,19 +90,43 @@ def parse_upload_record(record_file_path: Path) -> dict[Path, set[Checksum]]:
 
 class EventHandler(FileSystemEventHandler):
     def __init__(
-        self, *, file_system_events: SimpleQueue[tuple[FileSystemEvent, FolderToWatch]], folder_config: FolderToWatch
+        self,
+        *,
+        file_system_events: SimpleQueue[FileEventInfo],
+        folder_config: FolderToWatch,
+        file_system_events_for_test_monitoring: SimpleQueue[FileEventInfo] | None = None,
     ):
         super().__init__()
         self.file_system_events = file_system_events
         self.folder_config = folder_config
+        self.file_system_events_for_test_monitoring = file_system_events_for_test_monitoring
 
     @override
     def on_any_event(self, event: FileSystemEvent) -> None:
-        logger.debug(event)
+        logger.critical(f"{event} at {datetime.datetime.now(tz=datetime.UTC)}")
 
+    # FileCreatedEvent and FileModifiedEvent are prevalent on Windows
     @override
     def on_closed(self, event: FileClosedEvent) -> None:
-        self.file_system_events.put((event, self.folder_config))
+        self._add_event_to_queue(event)
+
+    @override
+    def on_created(self, event: DirCreatedEvent | FileCreatedEvent) -> None:
+        if isinstance(event, DirCreatedEvent):
+            return
+        self._add_event_to_queue(event)
+
+    @override
+    def on_modified(self, event: DirModifiedEvent | FileModifiedEvent) -> None:
+        if isinstance(event, DirModifiedEvent):
+            return
+        self._add_event_to_queue(event)
+
+    def _add_event_to_queue(self, event: FileSystemEvent):
+        event_info = FileEventInfo(file_system_event=event, folder_config=self.folder_config)
+        self.file_system_events.put(event_info)
+        if self.file_system_events_for_test_monitoring is not None:
+            self.file_system_events_for_test_monitoring.put(event_info)
 
 
 class MainLoop:
@@ -101,13 +137,16 @@ class MainLoop:
         boto_session: boto3.Session,
         idle_loop_sleep_seconds: float,
         previously_uploaded_files_record_path: Path,
+        create_duplicate_event_stream_for_test_monitoring: bool = False,
     ):
         super().__init__()
+        self.create_duplicate_event_stream_for_test_monitoring = create_duplicate_event_stream_for_test_monitoring
         self.previously_uploaded_files_record_path = previously_uploaded_files_record_path
         self.stop_flag_dir = Path(stop_flag_dir)
         self.boto_session = boto_session
         self._idle_loop_sleep_seconds = idle_loop_sleep_seconds
-        self.file_system_events: SimpleQueue[tuple[FileSystemEvent, FolderToWatch]]
+        self.file_system_events: SimpleQueue[FileEventInfo]
+        self.file_system_events_for_test_monitoring: SimpleQueue[FileEventInfo]
         self.observers: list[Observer] = []  # type: ignore[reportInvalidTypeForm] # pyright doesn't seem to like Observer
         self.event_handler: EventHandler
         self.config: CourierConfig
@@ -150,6 +189,8 @@ class MainLoop:
         This happens when the loop first starts, and also after any difference is detected in the configuration.
         """
         self.file_system_events = SimpleQueue()
+        if self.create_duplicate_event_stream_for_test_monitoring:
+            self.file_system_events_for_test_monitoring = SimpleQueue()
         self.observers.clear()  # type: ignore[reportUnknownMemberType] # pyright doesn't seem to like Observer
 
         self.config = load_config_from_aws(self.boto_session)
@@ -164,7 +205,12 @@ class MainLoop:
         for file in folder_path.glob(glob_path):
             if file.is_file():
                 # This isn't truly a FileClosedEvent, but it's easier to just have a single codepath for all uploading
-                self.file_system_events.put((FileClosedEvent(src_path=str(file)), folder_config))
+                event_info = FileEventInfo(
+                    file_system_event=FileClosedEvent(src_path=str(file)), folder_config=folder_config
+                )
+                self.file_system_events.put(event_info)
+                if self.create_duplicate_event_stream_for_test_monitoring:
+                    self.file_system_events_for_test_monitoring.put(event_info)
 
     def _upload_file(self, file_path: Path, folder_config: FolderToWatch):
         object_key = convert_path_to_s3_object_key(str(file_path), folder_config)
@@ -184,9 +230,10 @@ class MainLoop:
 
     def _process_file_event_queue(self):
         try:
-            event, folder_config = self.file_system_events.get(timeout=0.5)
+            event_info = self.file_system_events.get(timeout=0.5)
         except queue.Empty:
             return
+        event = event_info.file_system_event
         assert isinstance(event.src_path, str), (
             f"Expected event.src_path to be a string, but got {event.src_path} of type {type(event.src_path)}"
         )
@@ -194,7 +241,7 @@ class MainLoop:
         if file_path in self.uploaded_files:
             logger.info(f"Skipping {file_path} because it has already been uploaded")
             return  # TODO: decide how to handle changes to the file that alter the checksum
-        self._upload_file(file_path, folder_config)
+        self._upload_file(file_path, event_info.folder_config)
 
     def run(self) -> int:
         self._boot_up()
@@ -202,7 +249,13 @@ class MainLoop:
         folder_config = next(iter(self.config.folders_to_watch.values()))
         folder_path = folder_config.folder_path
         self.observers[0].schedule(  # type: ignore[reportUnknownMemberType] # pyright doesn't seem to like Observer
-            EventHandler(file_system_events=self.file_system_events, folder_config=folder_config),
+            EventHandler(
+                file_system_events=self.file_system_events,
+                folder_config=folder_config,
+                file_system_events_for_test_monitoring=self.file_system_events_for_test_monitoring
+                if self.create_duplicate_event_stream_for_test_monitoring
+                else None,
+            ),
             folder_path,
             recursive=folder_config.recursive,
         )
@@ -221,10 +274,14 @@ class MainLoop:
             logger.info(f"Connected to AWS as: {get_role_arn(self.boto_session)}")
             self._process_file_event_queue()
 
-            time.sleep(self._idle_loop_sleep_seconds)
+            self._idle_loop_sleep()
         self.observers[0].stop()  # type: ignore[reportUnknownMemberType] # pyright doesn't seem to like Observer
         self.observers[0].join()  # type: ignore[reportUnknownMemberType] # pyright doesn't seem to like Observer
         return 0
+
+    def _idle_loop_sleep(self):
+        # breaking out as separate method for easier testing
+        time.sleep(self._idle_loop_sleep_seconds)  # TODO: dont sleep if there are events in the queue
 
 
 def entrypoint(argv: Sequence[str]) -> int:
@@ -234,7 +291,7 @@ def entrypoint(argv: Sequence[str]) -> int:
         except argparse.ArgumentError:
             logger.exception("Error parsing command line arguments")
             return 2  # this is the exit code that is normally returned when exit_on_error=True for argparse
-        configure_logging(log_level=cli_args.log_level)
+        configure_logging(log_level=cli_args.log_level)  # TODO: move the logs folder into ProgramData by default
         logger.info('Starting "cloud-courier"')
         boto_session = (
             boto3.Session() if cli_args.use_generic_boto_session else create_boto_session(cli_args.aws_region)

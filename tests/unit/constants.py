@@ -16,6 +16,7 @@ GENERIC_COURIER_CONFIG = CourierConfig(
             folder_path=str(Path("/tmp")),  # noqa: S108 # this is not insecure to have the generic temp folder
             s3_key_prefix="woburn/cytation-5",
             s3_bucket_name="my-bucket",
+            delay_seconds_before_upload=0.05,
         )
     },
     aws_region="us-east-1",
@@ -25,7 +26,12 @@ COMPLEX_COURIER_CONFIG = CourierConfig(
     role_name="emeryville--star-1--cloud-courier--prod",
     app_config=AppConfig(),
     folders_to_watch={
-        str(x): FolderToWatch(folder_path=str(x), s3_key_prefix="emeryville/star-1", s3_bucket_name="my-bucket")
+        str(x): FolderToWatch(
+            folder_path=str(x),
+            s3_key_prefix="emeryville/star-1",
+            s3_bucket_name="my-bucket",
+            delay_seconds_before_upload=0.05,
+        )
         for x in range(100)
     },
     aws_region="us-west-1",

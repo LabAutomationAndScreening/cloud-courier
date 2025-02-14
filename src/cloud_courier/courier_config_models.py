@@ -19,6 +19,7 @@ class FolderToWatch(BaseModel, frozen=True):
     ignore_patterns: list[str] = Field(default_factory=list)  # TODO: implement
     s3_key_prefix: str
     s3_bucket_name: str
+    delay_seconds_before_upload: float = 10
     # TODO: allow truncating part of the file path prefix
     # TODO: allow deleting after upload
     # TODO: allow specifying a wait period before upload.
