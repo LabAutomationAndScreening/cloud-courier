@@ -16,6 +16,7 @@ author = "Eli Fine"
 extensions = [
     "sphinx.ext.autodoc",
     "sphinx.ext.napoleon",
+    "sphinx_togglebutton",
 ]
 
 templates_path = ["_templates"]

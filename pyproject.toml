@@ -31,6 +31,7 @@ dev = [
     "pytest-mock>=3.14.0",
     "time-machine>=2.16.0",
     "pytest-timeout>=2.3.1",
+    "sphinx-togglebutton==0.3.2",
 
     # Managed by upstream template
     "pyright>=1.1.394",
