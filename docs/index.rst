@@ -8,6 +8,8 @@ Cloud Courier documentation
 
 Overview: `Medium Article <https://medium.com/@ejfine/cloud-courier-an-open-source-tool-to-upload-data-from-lab-instruments-to-the-cloud-1f4ccbb7a2f5>`_
 
+Source code for the Cloud Courier agent (and this documentation): `Cloud Courier Github <https://github.com/LabAutomationAndScreening/cloud-courier>`_
+
 
 .. toctree::
    :maxdepth: 2
