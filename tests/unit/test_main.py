@@ -79,7 +79,9 @@ class TestArgParse(MainMixin):
             == 0
         )
 
-        spied_configure_logging.assert_called_once_with(log_level=expected_log_level, log_filename_prefix=ANY)
+        spied_configure_logging.assert_called_once_with(
+            log_level=expected_log_level, log_filename_prefix=ANY, suppress_console_logging=ANY
+        )
 
     def test_Given_log_folder_specified__Then_log_folder_passed_to_configure_logging(self, mocker: MockerFixture):
         spied_configure_logging = mocker.spy(main, "configure_logging")
@@ -98,7 +100,30 @@ class TestArgParse(MainMixin):
         )
 
         spied_configure_logging.assert_called_once_with(
-            log_filename_prefix=str(Path(expected_log_folder) / "cloud-courier-"), log_level=ANY
+            log_filename_prefix=str(Path(expected_log_folder) / "cloud-courier-"),
+            log_level=ANY,
+            suppress_console_logging=False,
+        )
+
+    def test_Given_suppress_console_logging_specified__Then_kwarg_passed_to_configure_logging(
+        self, mocker: MockerFixture
+    ):
+        spied_configure_logging = mocker.spy(main, "configure_logging")
+
+        assert (
+            entrypoint(
+                [
+                    f"--stop-flag-dir={self.flag_file_dir}",
+                    "--immediate-shut-down",
+                    "--aws-region=us-east-1",
+                    "--no-console-logging",
+                ]
+            )
+            == 0
+        )
+
+        spied_configure_logging.assert_called_once_with(
+            log_filename_prefix=ANY, log_level=ANY, suppress_console_logging=True
         )
 
 

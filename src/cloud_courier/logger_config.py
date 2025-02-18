@@ -7,7 +7,9 @@ import structlog
 SUBSYSTEM_NAME = "courier"
 
 
-def configure_logging(log_filename_prefix: str = "logs/cloud-courier-", log_level: str = "INFO"):
+def configure_logging(
+    *, log_filename_prefix: str = "logs/cloud-courier-", log_level: str = "INFO", suppress_console_logging: bool = False
+):
     """Configure structlog to output both to the console and JSON to a file.
 
     This also configures stdlib logging to also use the same structlog formatters using details found here.
@@ -82,7 +84,9 @@ def configure_logging(log_filename_prefix: str = "logs/cloud-courier-", log_leve
         structlog.stdlib.ProcessorFormatter.remove_processors_meta,
         structlog.dev.ConsoleRenderer(colors=True),
     ]
-
+    handlers = ["file"]
+    if not suppress_console_logging:
+        handlers.append("default")
     dictConfig(
         {
             "version": 1,
@@ -114,7 +118,7 @@ def configure_logging(log_filename_prefix: str = "logs/cloud-courier-", log_leve
             },
             "loggers": {
                 "": {
-                    "handlers": ["default", "file"],
+                    "handlers": handlers,
                     "level": log_level,
                     "propagate": True,
                 },

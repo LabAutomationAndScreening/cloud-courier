@@ -31,3 +31,8 @@ _ = parser.add_argument(
 )
 _ = parser.add_argument("--log-level", type=str, default="INFO", help="The log level to use for the logger")
 _ = parser.add_argument("--log-folder", type=str, help="The folder to write logs to")
+_ = parser.add_argument(
+    "--no-console-logging",
+    action="store_true",
+    help="Suppress console logging. Useful for some SSM Run commands.",
+)

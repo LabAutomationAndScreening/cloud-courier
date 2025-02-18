@@ -311,7 +311,9 @@ def entrypoint(argv: Sequence[str]) -> int:
         if cli_args.log_folder is not None:
             log_folder = Path(cli_args.log_folder)
         configure_logging(
-            log_level=cli_args.log_level, log_filename_prefix=str(log_folder / "cloud-courier-")
+            log_level=cli_args.log_level,
+            log_filename_prefix=str(log_folder / "cloud-courier-"),
+            suppress_console_logging=bool(cli_args.no_console_logging),
         )  # TODO: move the logs folder into ProgramData by default
         logger.info('Starting "cloud-courier"')
         boto_session = (
