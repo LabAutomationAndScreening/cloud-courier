@@ -307,7 +307,12 @@ def entrypoint(argv: Sequence[str]) -> int:
         except argparse.ArgumentError:
             logger.exception("Error parsing command line arguments")
             return 2  # this is the exit code that is normally returned when exit_on_error=True for argparse
-        configure_logging(log_level=cli_args.log_level)  # TODO: move the logs folder into ProgramData by default
+        log_folder = Path("logs")
+        if cli_args.log_folder is not None:
+            log_folder = Path(cli_args.log_folder)
+        configure_logging(
+            log_level=cli_args.log_level, log_filename_prefix=str(log_folder / "cloud-courier-")
+        )  # TODO: move the logs folder into ProgramData by default
         logger.info('Starting "cloud-courier"')
         boto_session = (
             boto3.Session() if cli_args.use_generic_boto_session else create_boto_session(cli_args.aws_region)

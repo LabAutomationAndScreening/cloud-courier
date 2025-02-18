@@ -30,3 +30,4 @@ _ = parser.add_argument(
     default=5,
 )
 _ = parser.add_argument("--log-level", type=str, default="INFO", help="The log level to use for the logger")
+_ = parser.add_argument("--log-folder", type=str, help="The folder to write logs to")

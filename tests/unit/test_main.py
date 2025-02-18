@@ -1,5 +1,6 @@
 import logging
 import random
+import tempfile
 import uuid
 from collections.abc import Generator
 from pathlib import Path
@@ -78,7 +79,27 @@ class TestArgParse(MainMixin):
             == 0
         )
 
-        spied_configure_logging.assert_called_once_with(log_level=expected_log_level)
+        spied_configure_logging.assert_called_once_with(log_level=expected_log_level, log_filename_prefix=ANY)
+
+    def test_Given_log_folder_specified__Then_log_folder_passed_to_configure_logging(self, mocker: MockerFixture):
+        spied_configure_logging = mocker.spy(main, "configure_logging")
+        with tempfile.TemporaryDirectory() as temp_dir:
+            expected_log_folder = temp_dir
+        assert (
+            entrypoint(
+                [
+                    f"--stop-flag-dir={self.flag_file_dir}",
+                    "--immediate-shut-down",
+                    "--aws-region=us-east-1",
+                    f"--log-folder={expected_log_folder}",
+                ]
+            )
+            == 0
+        )
+
+        spied_configure_logging.assert_called_once_with(
+            log_filename_prefix=str(Path(expected_log_folder) / "cloud-courier-"), log_level=ANY
+        )
 
 
 class TestShutdown(MainMixin):
