@@ -6,5 +6,5 @@ If you are not using the provided AWS Organization and Central Infrastructure te
 
 #. Create the Github Repository that will manage your Cloud Courier installation.
     #. In your Github organization, click Create New Repository. Name it something like ``cloud-courier-infrastructure``
-    #. Follow the steps in `the Cloud Courier Infrastructure template repository <https://github.com/LabAutomationAndScreening/copier-cloud-courier-infrastructure>`_ to set up your own repsoitory.
+    #. Follow the steps in `the Cloud Courier Infrastructure template repository <https://github.com/LabAutomationAndScreening/copier-cloud-courier-infrastructure>`_ to set up your own repository.
     #. Merge the code to ``main`` to deploy the initial infrastructure.
