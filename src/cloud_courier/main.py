@@ -25,6 +25,7 @@ from watchdog.observers import Observer
 
 from .aws_credentials import create_boto_session
 from .aws_credentials import get_role_arn
+from .cli import get_version
 from .cli import parser
 from .constants import Checksum
 from .courier_config_models import CLOUDWATCH_HEARTBEAT_NAMESPACE
@@ -32,6 +33,7 @@ from .courier_config_models import CLOUDWATCH_INSTANCE_ID_DIMENSION_NAME
 from .courier_config_models import HEARTBEAT_METRIC_NAME
 from .courier_config_models import FolderToWatch
 from .load_config import CourierConfig
+from .load_config import extract_role_name_from_arn
 from .load_config import load_config_from_aws
 from .logger_config import configure_logging
 from .upload import convert_path_to_s3_object_key
@@ -300,6 +302,22 @@ class MainLoop:
         time.sleep(self._idle_loop_sleep_seconds)  # TODO: dont sleep if there are events in the queue
 
 
+def _update_instance_tag(boto_session: boto3.Session):
+    role_arn = get_role_arn(boto_session)
+    logger.info(f"Connected to AWS as: {role_arn}")
+    role_name = extract_role_name_from_arn(role_arn)
+    ssm_client = boto_session.client("ssm")
+    installed_agent_version_tag_key = "installed-cloud-courier-agent-version"  # Warning! This tag key is originally created by the cloud-courier-infrastructure Pulumi code, so don't change it here without changing it there
+    instance_id = "bob"
+    _ = ssm_client.add_tags_to_resource(
+        ResourceType="ManagedInstance",
+        ResourceId=instance_id,
+        Tags=[
+            {"Key": installed_agent_version_tag_key, "Value": get_version()},
+        ],
+    )
+
+
 def entrypoint(argv: Sequence[str]) -> int:
     try:
         try:
@@ -322,8 +340,10 @@ def entrypoint(argv: Sequence[str]) -> int:
         if cli_args.immediate_shut_down:
             logger.info("Exiting due to --immediate-shut-down")
             return 0
-        logger.info(f"Connected to AWS as: {get_role_arn(boto_session)}")
-        # TODO: send SNS alert if error within main loop (until heartbeat and cloudwatch set up)
+        _update_instance_tag(boto_session)
+        if cli_args.shut_down_before_main_loop:
+            logger.info("Exiting due to --shut-down-before-main-loop")
+            return 0
         return MainLoop(
             stop_flag_dir=cli_args.stop_flag_dir,
             boto_session=boto_session,

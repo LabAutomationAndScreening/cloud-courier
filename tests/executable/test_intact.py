@@ -6,7 +6,7 @@ import pytest
 
 
 @pytest.mark.only_exe
-class TestExeIsIntact:
+class TestExeIsIntact:  # TODO: add this testing to the CI pipeline
     @pytest.fixture(autouse=True)
     def _setup(self):
         exe_file_name = f"cloud-courier{'.exe' if os.name == 'nt' else ''}"

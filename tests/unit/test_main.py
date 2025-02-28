@@ -7,11 +7,14 @@ from pathlib import Path
 from threading import Thread
 from unittest.mock import ANY
 
+import boto3
 import pytest
 from botocore.session import Session
 from pytest_mock import MockerFixture
 
 from cloud_courier import entrypoint
+from cloud_courier import get_role_arn
+from cloud_courier import get_version
 from cloud_courier import main
 
 from .fixtures import mock_path_to_aws_credentials
@@ -144,6 +147,34 @@ class TestArgParse(MainMixin):
         spied_configure_logging.assert_called_once_with(
             log_filename_prefix=ANY, log_level=ANY, suppress_console_logging=True
         )
+
+
+class TestUpdateInstanceTag(MainMixin):
+    def test_When_run__Then_managed_instance_tag_updated_to_version(self, mocker: MockerFixture):
+        expected_version = str(uuid.uuid4())
+        expected_computer_info = "cambridge--cytation-5"
+        _ = mocker.patch.object(main, get_version.__name__, return_value=expected_version, autospec=True)
+        _ = mocker.patch.object(
+            main,
+            get_role_arn.__name__,
+            autospec=True,
+            return_value=f"arn:aws:sts::321623840054:assumed-role/{expected_computer_info}--cloud-courier--dev/mi-0f07754091d56481f",
+        )
+        random_region = random.choice(["us-east-1", "us-west-2", "eu-west-1", "ap-southeast-1", "ap-northeast-1"])
+
+        assert (
+            entrypoint(
+                [
+                    f"--stop-flag-dir={self.flag_file_dir}",
+                    "--shut-down-before-main-loop",
+                    "--aws-region",
+                    random_region,
+                ]
+            )
+            == 0
+        )
+
+        ssm_client = boto3.client("ssm")
 
 
 class TestShutdown(MainMixin):

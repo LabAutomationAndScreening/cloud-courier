@@ -21,6 +21,11 @@ _ = parser.add_argument(
     help="Shut down the system before actually doing anything meaningful. Useful for unit testing.",
 )
 _ = parser.add_argument(
+    "--shut-down-before-main-loop",
+    action="store_true",
+    help="Shut down the system before entering the main loop. Useful for unit testing.",
+)
+_ = parser.add_argument(
     "--use-generic-boto-session",
     action="store_true",
     help="Use a generic boto3 session instead of attempting to use the SSM credentials. Useful for testing.",
