@@ -1,6 +1,6 @@
 [project]
 name = "cloud-courier"
-version = "0.1.0"
+version = "0.0.4"
 description = "Agent to upload files to cloud"
 authors = [
     {name = "Eli Fine"},

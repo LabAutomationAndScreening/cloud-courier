@@ -1,6 +1,14 @@
 import argparse
+from importlib.metadata import version
+
+
+def get_version() -> str:
+    return f"v{version('cloud-courier')}"
+
 
 parser = argparse.ArgumentParser(description="cloud-courier", exit_on_error=False)
+_ = parser.add_argument("--version", action="version", version=get_version())
+
 _ = parser.add_argument(
     "--aws-region",
     required=True,

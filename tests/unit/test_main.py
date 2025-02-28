@@ -28,6 +28,20 @@ def test_Given_no_args__When_run__Then_returns_error_code():
     assert entrypoint([]) > 0
 
 
+def test_When_version__Then_returns_something_looking_like_semver(capsys: pytest.CaptureFixture[str]):
+    expected_num_dots_in_version = 2
+
+    with pytest.raises(SystemExit) as e:  # noqa: PT011 # there is nothing meaningful to match against for the text of this error, we are asserting later that the exit code is zero
+        _ = entrypoint(["--version"])
+    assert e.value.code == 0
+
+    captured = capsys.readouterr()
+    actual_version = captured.out.strip()
+
+    assert actual_version.startswith("v")
+    assert actual_version.count(".") == expected_num_dots_in_version
+
+
 def test_Given_something_mocked_to_error__Then_error_logged(mocker: MockerFixture):
     expected_error = str(uuid.uuid4())
     spied_logger = mocker.spy(main.logger, "exception")
@@ -56,7 +70,12 @@ class TestArgParse(MainMixin):
 
         assert (
             entrypoint(
-                [f"--stop-flag-dir={self.flag_file_dir}", "--immediate-shut-down", "--aws-region", expected_region]
+                [
+                    f"--stop-flag-dir={self.flag_file_dir}",
+                    "--immediate-shut-down",
+                    "--aws-region",
+                    expected_region,
+                ]
             )
             == 0
         )
@@ -134,7 +153,11 @@ class TestShutdown(MainMixin):
         thread = Thread(
             target=entrypoint,
             args=(
-                [f"--stop-flag-dir={self.flag_file_dir}", "--aws-region=us-east-1", "--idle-loop-sleep-seconds=0.1"],
+                [
+                    f"--stop-flag-dir={self.flag_file_dir}",
+                    "--aws-region=us-east-1",
+                    "--idle-loop-sleep-seconds=0.1",
+                ],
             ),
         )
         thread.start()
