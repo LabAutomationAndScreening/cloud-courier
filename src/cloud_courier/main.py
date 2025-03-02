@@ -12,6 +12,7 @@ from queue import SimpleQueue
 from typing import override
 
 import boto3
+from mypy_boto3_ssm.client import SSMClient
 from pydantic import BaseModel
 from pydantic import Field
 from watchdog.events import DirCreatedEvent
@@ -40,6 +41,7 @@ from .upload import convert_path_to_s3_object_key
 from .upload import upload_to_s3
 
 RESET_POINT_FOR_LOOP_ITERATION_COUNTER = 20  # this is only for assertions in unit tests, so just reset the value if it gets arbitrarily high so that it doesn't cause an overflow when running in production
+INSTALLED_AGENT_VERSION_TAG_KEY = "installed-cloud-courier-agent-version"  # Warning! This tag key is originally created by the cloud-courier-infrastructure Pulumi code, so don't change it here without changing it there
 logger = logging.getLogger(__name__)
 
 
@@ -302,18 +304,36 @@ class MainLoop:
         time.sleep(self._idle_loop_sleep_seconds)  # TODO: dont sleep if there are events in the queue
 
 
-def _update_instance_tag(boto_session: boto3.Session):
-    role_arn = get_role_arn(boto_session)
-    logger.info(f"Connected to AWS as: {role_arn}")
+def _create_ssm_client(boto_session: boto3.Session) -> SSMClient:
+    # separate function for easy mocking in unit tests
+    return boto_session.client(  # pragma: no cover # The SSM Client is always stubbed during tests, so this code never executes
+        "ssm"
+    )
+
+
+def _update_instance_tag(*, boto_session: boto3.Session, role_arn: str):
+    # CAUTION! This function is only tested using botocore stubbing, so be careful when changing it. Localstack does not have thorough support for SSM Instances
     role_name = extract_role_name_from_arn(role_arn)
-    ssm_client = boto_session.client("ssm")
-    installed_agent_version_tag_key = "installed-cloud-courier-agent-version"  # Warning! This tag key is originally created by the cloud-courier-infrastructure Pulumi code, so don't change it here without changing it there
-    instance_id = "bob"
+    ssm_client = _create_ssm_client(boto_session)
+
+    logger.critical(f"calling with role name: {role_name}")
+    instance_info_response = ssm_client.describe_instance_information(
+        Filters=[{"Key": "IamRole", "Values": [role_name]}]
+    )
+    instances = instance_info_response["InstanceInformationList"]
+    assert len(instances) == 1, (
+        f"Expected to find exactly one instance with role name {role_name}, but found {len(instances)}: {instances}"
+    )  # TODO: explicitly unit test this piece of business logic
+    instance = instances[0]
+    assert "InstanceId" in instance, (
+        f"Expected to find an instance ID in the instance information, but found {instance}"
+    )
+    instance_id = instance["InstanceId"]
     _ = ssm_client.add_tags_to_resource(
         ResourceType="ManagedInstance",
         ResourceId=instance_id,
         Tags=[
-            {"Key": installed_agent_version_tag_key, "Value": get_version()},
+            {"Key": INSTALLED_AGENT_VERSION_TAG_KEY, "Value": get_version()},
         ],
     )
 
@@ -340,7 +360,9 @@ def entrypoint(argv: Sequence[str]) -> int:
         if cli_args.immediate_shut_down:
             logger.info("Exiting due to --immediate-shut-down")
             return 0
-        _update_instance_tag(boto_session)
+        role_arn = get_role_arn(boto_session)
+        logger.info(f"Connected to AWS as: {role_arn}")
+        _update_instance_tag(boto_session=boto_session, role_arn=role_arn)
         if cli_args.shut_down_before_main_loop:
             logger.info("Exiting due to --shut-down-before-main-loop")
             return 0

@@ -14,6 +14,7 @@ from .courier_config_models import FolderToWatch
 from .load_config import CourierConfig
 from .load_config import extract_role_name_from_arn
 from .load_config import load_config_from_aws
+from .main import INSTALLED_AGENT_VERSION_TAG_KEY
 from .main import RESET_POINT_FOR_LOOP_ITERATION_COUNTER
 from .main import MainLoop
 from .main import add_to_upload_record
