@@ -7,11 +7,16 @@ from pathlib import Path
 from threading import Thread
 from unittest.mock import ANY
 
+import boto3
 import pytest
 from botocore.session import Session
+from botocore.stub import Stubber
 from pytest_mock import MockerFixture
 
+from cloud_courier import INSTALLED_AGENT_VERSION_TAG_KEY
 from cloud_courier import entrypoint
+from cloud_courier import get_role_arn
+from cloud_courier import get_version
 from cloud_courier import main
 
 from .fixtures import mock_path_to_aws_credentials
@@ -26,6 +31,20 @@ GENERIC_REQUIRED_CLI_ARGS = ("--aws-region=us-east-2", "--stop-flag-dir=/tmp")
 def test_Given_no_args__When_run__Then_returns_error_code():
     # TODO: capture the log message so the stderr is not overrun with log messages during testing
     assert entrypoint([]) > 0
+
+
+def test_When_version__Then_returns_something_looking_like_semver(capsys: pytest.CaptureFixture[str]):
+    expected_num_dots_in_version = 2
+
+    with pytest.raises(SystemExit) as e:  # noqa: PT011 # there is nothing meaningful to match against for the text of this error, we are asserting later that the exit code is zero
+        _ = entrypoint(["--version"])
+    assert e.value.code == 0
+
+    captured = capsys.readouterr()
+    actual_version = captured.out.strip()
+
+    assert actual_version.startswith("v")
+    assert actual_version.count(".") == expected_num_dots_in_version
 
 
 def test_Given_something_mocked_to_error__Then_error_logged(mocker: MockerFixture):
@@ -56,7 +75,12 @@ class TestArgParse(MainMixin):
 
         assert (
             entrypoint(
-                [f"--stop-flag-dir={self.flag_file_dir}", "--immediate-shut-down", "--aws-region", expected_region]
+                [
+                    f"--stop-flag-dir={self.flag_file_dir}",
+                    "--immediate-shut-down",
+                    "--aws-region",
+                    expected_region,
+                ]
             )
             == 0
         )
@@ -127,14 +151,73 @@ class TestArgParse(MainMixin):
         )
 
 
+class TestUpdateInstanceTag(MainMixin):
+    def test_When_run__Then_managed_instance_tag_updated_to_version(self, mocker: MockerFixture):
+        expected_version = str(uuid.uuid4())
+        expected_computer_info = "cambridge--cytation-5"  # arbitrary
+        expected_role_name = f"{expected_computer_info}--cloud-courier--dev"  # arbitrary
+        expected_instance_id = "mi-0f07754091d56481f"  # arbitrary
+        _ = mocker.patch.object(main, get_version.__name__, return_value=expected_version, autospec=True)
+        _ = mocker.patch.object(
+            main,
+            get_role_arn.__name__,
+            autospec=True,
+            return_value=f"arn:aws:sts::321623840054:assumed-role/{expected_role_name}/{expected_instance_id}",  # arbitrary account ID and instance ID
+        )
+        random_region = random.choice(["us-east-1", "us-west-2", "eu-west-1", "ap-southeast-1", "ap-northeast-1"])
+        session = boto3.Session(region_name=random_region)
+        ssm_client = session.client("ssm")
+        stubber = Stubber(ssm_client)
+        _ = mocker.patch.object(main, "_create_ssm_client", autospec=True, return_value=ssm_client)
+        describe_response = {
+            "InstanceInformationList": [{"InstanceId": expected_instance_id}],
+            "ResponseMetadata": {"HTTPStatusCode": 200},
+        }
+        expected_describe_params = {"Filters": [{"Key": "IamRole", "Values": [expected_role_name]}]}
+        stubber.add_response("describe_instance_information", describe_response, expected_describe_params)
+        add_tags_params = {
+            "ResourceType": "ManagedInstance",
+            "ResourceId": expected_instance_id,
+            "Tags": [{"Key": INSTALLED_AGENT_VERSION_TAG_KEY, "Value": expected_version}],
+        }
+        stubber.add_response("add_tags_to_resource", {"ResponseMetadata": {"HTTPStatusCode": 200}}, add_tags_params)
+
+        stubber.activate()
+
+        assert (
+            entrypoint(
+                [
+                    f"--stop-flag-dir={self.flag_file_dir}",
+                    "--shut-down-before-main-loop",
+                    "--aws-region",
+                    random_region,
+                ]
+            )
+            == 0
+        )
+        stubber.assert_no_pending_responses()
+
+        # Due to the way the Stubber works with the expected_params, the test would fail if the describe_instance_information method is called with a different role name than the one we are expecting
+        # Due to the way the Stubber works with the expected_params, the test would fail if the add_tags_to_resource method is called with a different InstanceId that the one we are expecting
+
+
 class TestShutdown(MainMixin):
     @pytest.mark.timeout(10)
     @pytest.mark.usefixtures(mocked_generic_config.__name__)
-    def test_Given_no_files_to_upload__When_flag_file_created__Then_clean_exit(self):
+    def test_Given_no_files_to_upload__When_flag_file_created__Then_clean_exit(self, mocker: MockerFixture):
+        _ = mocker.patch.object(  # updating the instance tag has no bearing on the logic under test here, so patching it
+            main,
+            main._update_instance_tag.__name__,  # noqa: SLF001 # yes, this is private, but we're just patching the function to prevent it from running
+            autospec=True,
+        )
         thread = Thread(
             target=entrypoint,
             args=(
-                [f"--stop-flag-dir={self.flag_file_dir}", "--aws-region=us-east-1", "--idle-loop-sleep-seconds=0.1"],
+                [
+                    f"--stop-flag-dir={self.flag_file_dir}",
+                    "--aws-region=us-east-1",
+                    "--idle-loop-sleep-seconds=0.1",
+                ],
             ),
         )
         thread.start()

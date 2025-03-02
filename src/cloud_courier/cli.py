@@ -1,6 +1,14 @@
 import argparse
+from importlib.metadata import version
+
+
+def get_version() -> str:
+    return f"v{version('cloud-courier')}"
+
 
 parser = argparse.ArgumentParser(description="cloud-courier", exit_on_error=False)
+_ = parser.add_argument("--version", action="version", version=get_version())
+
 _ = parser.add_argument(
     "--aws-region",
     required=True,
@@ -11,6 +19,11 @@ _ = parser.add_argument(
     "--immediate-shut-down",
     action="store_true",
     help="Shut down the system before actually doing anything meaningful. Useful for unit testing.",
+)
+_ = parser.add_argument(
+    "--shut-down-before-main-loop",
+    action="store_true",
+    help="Shut down the system before entering the main loop. Useful for unit testing.",
 )
 _ = parser.add_argument(
     "--use-generic-boto-session",

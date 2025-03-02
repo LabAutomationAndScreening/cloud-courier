@@ -12,6 +12,7 @@ from queue import SimpleQueue
 from typing import override
 
 import boto3
+from mypy_boto3_ssm.client import SSMClient
 from pydantic import BaseModel
 from pydantic import Field
 from watchdog.events import DirCreatedEvent
@@ -25,6 +26,7 @@ from watchdog.observers import Observer
 
 from .aws_credentials import create_boto_session
 from .aws_credentials import get_role_arn
+from .cli import get_version
 from .cli import parser
 from .constants import Checksum
 from .courier_config_models import CLOUDWATCH_HEARTBEAT_NAMESPACE
@@ -32,12 +34,14 @@ from .courier_config_models import CLOUDWATCH_INSTANCE_ID_DIMENSION_NAME
 from .courier_config_models import HEARTBEAT_METRIC_NAME
 from .courier_config_models import FolderToWatch
 from .load_config import CourierConfig
+from .load_config import extract_role_name_from_arn
 from .load_config import load_config_from_aws
 from .logger_config import configure_logging
 from .upload import convert_path_to_s3_object_key
 from .upload import upload_to_s3
 
 RESET_POINT_FOR_LOOP_ITERATION_COUNTER = 20  # this is only for assertions in unit tests, so just reset the value if it gets arbitrarily high so that it doesn't cause an overflow when running in production
+INSTALLED_AGENT_VERSION_TAG_KEY = "installed-cloud-courier-agent-version"  # Warning! This tag key is originally created by the cloud-courier-infrastructure Pulumi code, so don't change it here without changing it there
 logger = logging.getLogger(__name__)
 
 
@@ -300,6 +304,40 @@ class MainLoop:
         time.sleep(self._idle_loop_sleep_seconds)  # TODO: dont sleep if there are events in the queue
 
 
+def _create_ssm_client(boto_session: boto3.Session) -> SSMClient:
+    # separate function for easy mocking in unit tests
+    return boto_session.client(  # pragma: no cover # The SSM Client is always stubbed during tests, so this code never executes
+        "ssm"
+    )
+
+
+def _update_instance_tag(*, boto_session: boto3.Session, role_arn: str):
+    # CAUTION! This function is only tested using botocore stubbing, so be careful when changing it. Localstack does not have thorough support for SSM Instances
+    role_name = extract_role_name_from_arn(role_arn)
+    ssm_client = _create_ssm_client(boto_session)
+
+    logger.critical(f"calling with role name: {role_name}")
+    instance_info_response = ssm_client.describe_instance_information(
+        Filters=[{"Key": "IamRole", "Values": [role_name]}]
+    )
+    instances = instance_info_response["InstanceInformationList"]
+    assert len(instances) == 1, (
+        f"Expected to find exactly one instance with role name {role_name}, but found {len(instances)}: {instances}"
+    )  # TODO: explicitly unit test this piece of business logic
+    instance = instances[0]
+    assert "InstanceId" in instance, (
+        f"Expected to find an instance ID in the instance information, but found {instance}"
+    )
+    instance_id = instance["InstanceId"]
+    _ = ssm_client.add_tags_to_resource(
+        ResourceType="ManagedInstance",
+        ResourceId=instance_id,
+        Tags=[
+            {"Key": INSTALLED_AGENT_VERSION_TAG_KEY, "Value": get_version()},
+        ],
+    )
+
+
 def entrypoint(argv: Sequence[str]) -> int:
     try:
         try:
@@ -322,8 +360,12 @@ def entrypoint(argv: Sequence[str]) -> int:
         if cli_args.immediate_shut_down:
             logger.info("Exiting due to --immediate-shut-down")
             return 0
-        logger.info(f"Connected to AWS as: {get_role_arn(boto_session)}")
-        # TODO: send SNS alert if error within main loop (until heartbeat and cloudwatch set up)
+        role_arn = get_role_arn(boto_session)
+        logger.info(f"Connected to AWS as: {role_arn}")
+        _update_instance_tag(boto_session=boto_session, role_arn=role_arn)
+        if cli_args.shut_down_before_main_loop:
+            logger.info("Exiting due to --shut-down-before-main-loop")
+            return 0
         return MainLoop(
             stop_flag_dir=cli_args.stop_flag_dir,
             boto_session=boto_session,

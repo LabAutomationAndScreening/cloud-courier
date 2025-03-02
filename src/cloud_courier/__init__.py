@@ -5,6 +5,7 @@ from . import upload
 from .aws_credentials import get_role_arn
 from .aws_credentials import path_to_aws_credentials
 from .aws_credentials import read_aws_creds
+from .cli import get_version
 from .courier_config_models import CLOUDWATCH_HEARTBEAT_NAMESPACE
 from .courier_config_models import CLOUDWATCH_INSTANCE_ID_DIMENSION_NAME
 from .courier_config_models import HEARTBEAT_METRIC_NAME
@@ -13,6 +14,7 @@ from .courier_config_models import FolderToWatch
 from .load_config import CourierConfig
 from .load_config import extract_role_name_from_arn
 from .load_config import load_config_from_aws
+from .main import INSTALLED_AGENT_VERSION_TAG_KEY
 from .main import RESET_POINT_FOR_LOOP_ITERATION_COUNTER
 from .main import MainLoop
 from .main import add_to_upload_record
