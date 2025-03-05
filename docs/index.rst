@@ -15,5 +15,6 @@ Source code for the Cloud Courier agent (and this documentation): `Cloud Courier
    :maxdepth: 2
    :caption: Contents:
 
+   end-user-gui-access
    installation
    faq
