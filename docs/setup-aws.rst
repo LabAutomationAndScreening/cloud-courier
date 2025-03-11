@@ -20,6 +20,7 @@ If you already have a AWS organization for your company, and are using AWS Ident
     #. You should now be at "Step 2: Specify Stack Details". Enter something descriptive for the Stack Name (e.g. ``pulumi-bootstrap``), fill in your AWS Organization ID, and the GitHub repository name you created to manage your AWS Organization. Click "Next".
     #. You should now be at "Step 3: Configure Stack Options". Scroll to the bottom and check "I acknowledge that AWS CloudFormation might create IAM resources with custom names." then click "Next".
     #. You should now be at "Step 4: Review and create". Scroll to the bottom and click "Submit".
+    #. You should now see a Stack Info tab with the Status of "CREATE_IN_PROGRESS". Wait for it to change to "CREATE_COMPLETE" before proceeding.
 #. Merge the code to the ``main`` branch of your Github repository (TODO: add more details on how to do this). This will trigger the initial creation of various baseline AWS accounts and resources.
 #. Create the Github Repository that will manage your Central Infrastructure (including users and permissions).
     #. In your Github organization, click Create New Repository. Use the name you provided in the questionnaire when instantiating the ``aws-organization`` code from the template (typically ``aws-central-infrastructure``)
