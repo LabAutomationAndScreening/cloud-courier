@@ -8,7 +8,7 @@ If you already have a AWS organization for your company, and are using AWS Ident
 #. `Turn that account into an AWS Organization <https://docs.aws.amazon.com/organizations/latest/userguide/orgs_manage_org_create.html>`_
 #. Note down the AWS Organization ID (e.g. ``o-2v54b6ap2r``) and the Account ID of the management account (e.g. ``123456789012``); you'll need these later.
 #. Enable AWS Identity Center by navigating `here <https://console.aws.amazon.com/singlesignon>`_ and clicking ``Enable``. Then note down the application ID (e.g. ``d-9067c20053``) listed as part of the ``AWS access portal URL``.
-#. Within Identity Center, go to Settings->Authentication->Send Email to users created by API (there’s no programmatic way to do this as of 2/5/25) if you are not using an External Identity Provider (and are creating users directly through the API)
+#. Within Identity Center, go to Settings->Authentication. Click Configure on the Standard Authentication section, check the ``Send email OTP`` box and click Save (there's no programmatic way to do this as of 2/5/25) if you are not using an External Identity Provider (and are creating users directly through the API).
 #. Create the Github Repository that will manage your AWS Organization.
     #. In your Github organization, click Create New Repository. Name it something like ``aws-organization``
     #. Follow the steps in `the AWS Organization template repository <https://github.com/LabAutomationAndScreening/copier-aws-organization>`_ to set up your own repository.
