@@ -12,7 +12,7 @@ It doesn't require any VPN or rely on a stable internet connection to the lab. I
   :width: 300
   :alt: Alternative text
 
-2. If you haven't authenticated with your SSO provider recently, it will automatically open an internet browser window to the sign-in page (if you have recently authenticated, it will skip directly to step 4). This example uses AWS Identity Center for the SSO in this example, but your SSO provider may be Okta, Google, Microsoft, etc.
+2. If you haven't authenticated with your SSO provider recently, it will automatically open an internet browser window to the sign-in page (if you have recently authenticated, it will skip directly to step 4). This example uses AWS Identity Center for the SSO  (which is the default sign-on provider that Cloud Courier will configure if your company does not already have an SSO provider), but your SSO provider may be Okta, Google, Microsoft, etc.
 
 .. image:: images/end-user-boot-up/aws-username.png
   :width: 400
