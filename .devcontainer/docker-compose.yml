@@ -15,7 +15,7 @@ services:
       - "61020:2222"
     environment:
       - AWS_PROFILE=localstack
-      - AWS_DEFAULT_REGION=
+      - AWS_DEFAULT_REGION=us-east-1
 
   localstack:
     image: localstack/localstack:4.1.1 # no known reason for not using newer versions, just pinning for best practice
