@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/usr/bin/env sh
 set -ex
 
 mkdir -p ~/.aws
@@ -10,10 +10,16 @@ else
 fi
 
 cat >> ~/.aws/config <<EOF
+
+
+
+
 [profile localstack]
 region=us-east-1
 output=json
 endpoint_url = $LOCALSTACK_ENDPOINT_URL
+
+
 EOF
 cat >> ~/.aws/credentials <<EOF
 [localstack]

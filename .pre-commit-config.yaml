@@ -43,7 +43,7 @@ repos:
 
 # Reformatting (should generally come before any file format or other checks, because reformatting can change things)
 -   repo: https://github.com/crate-ci/typos
-    rev: e59f226fadcb05a1440bd8b35ee994a9d21bf03b  # frozen: typos-dict-v0.12.4
+    rev: 2300ad1b6b5c37da54bcafb1a06211196503eac9  # frozen: v1
     hooks:
       - id: typos
 -   repo: https://github.com/pre-commit/pre-commit-hooks
@@ -162,7 +162,7 @@ repos:
         description: Runs hadolint to lint Dockerfiles
 
 -   repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: 871f3bcae4fe473cd7109c3a068db975dc035e3b  # frozen: v0.9.4
+    rev: 41d2daf392fbf43341a77f24a9c6481a4b66af98  # frozen: v0.9.10
     hooks:
     -   id: ruff
         name: ruff-src
@@ -175,7 +175,7 @@ repos:
     -   id: ruff-format
 
 -   repo: https://github.com/pylint-dev/pylint
-    rev: c2b01c3d0b6410d4c93eb1f32fb28f2116b1e68f  # frozen: v3.3.4
+    rev: aaab3ccb541532d2bcdf0410ab93ff4fafc266f5  # frozen: v3.3.5
     hooks:
     -   id: pylint
         name: pylint
