@@ -1,10 +1,11 @@
 # Changes here will be overwritten by Copier
-_commit: v0.0.8
+_commit: v0.0.12
 _src_path: gh:LabAutomationAndScreening/copier-python-package-template
 create_docs: true
 description: Agent to upload files to cloud
 full_repo_url: https://github.com/LabAutomationAndScreening/cloud-courier
 is_frozen_executable: true
+is_open_source: false
 package_name: cloud-courier
 primary_author: Eli Fine
 python_ci_versions:

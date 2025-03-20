@@ -25,7 +25,7 @@ dependencies = [
 
 [dependency-groups]
 dev = [
-    # Specific to this template
+    # Specific to this repository
 
     "boto3-stubs[all]>=1.36.3",
     "pytest-mock>=3.14.0",
@@ -34,7 +34,7 @@ dev = [
     "sphinx-togglebutton==0.3.2",
 
     # Managed by upstream template
-    "pyright>=1.1.396",
+    "pyright>=1.1.397",
     "pytest>=8.3.4",
     "pytest-cov>=6.0.0",
     "pytest-randomly>=3.16.0",

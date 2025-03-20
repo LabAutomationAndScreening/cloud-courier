@@ -1,4 +1,4 @@
-name: Publish to PyPI
+name: Publish to Production Package Registry
 
 on:
   workflow_dispatch:
@@ -32,7 +32,7 @@ jobs:
         timeout-minutes: 30 # this is the amount of time this action will wait to attempt to acquire the mutex lock before failing, e.g. if other jobs are queued up in front of it
 
       - name: Cache Pre-commit hooks
-        uses: actions/cache@v4.2.0
+        uses: actions/cache@v4.2.2
         env:
           cache-name: cache-pre-commit-hooks
         with:
@@ -87,5 +87,15 @@ jobs:
         with:
           python-version: 3.12.7
 
+
       - name: Build package
-        run: uv build --no-sources
+        run: |
+
+          uv build --no-sources
+
+
+
+      - name: Publish package
+        run: |
+
+          uv publish --verbose --index pypi

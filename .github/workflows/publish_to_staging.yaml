@@ -1,10 +1,7 @@
-name: CI
+name: Publish to Staging Package Registry
 
 on:
-  push:
-    branches-ignore:
-      - 'gh-readonly-queue/**' # don't run (again) when on these special branches created during merge groups; the `on: merge_group` already triggers it.
-  merge_group:
+  workflow_dispatch:
 
 env:
   PYTHONUNBUFFERED: True
@@ -64,15 +61,6 @@ jobs:
             JOB_MATCHING_DEV_ENV: true
 
     runs-on: ${{ matrix.os }}
-    services:
-      localstack:
-        image: localstack/localstack:4.1.1
-        ports:
-          - 4566:4566
-        env:
-          AWS_ACCESS_KEY_ID: test
-          AWS_SECRET_ACCESS_KEY: test
-          SERVICES: s3,sts,cloudwatch,ssm,events,iam
 
     steps:
       - name: Checkout code
@@ -82,67 +70,12 @@ jobs:
         uses: ./.github/actions/install_deps_uv
         with:
           python-version: ${{ matrix.python-version }}
-      - name: Create AWS profile
-        run: |
-          sh .devcontainer/create-aws-profile.sh
-          cat ~/.aws/config
+
       - name: Unit test
-        run: uv run pytest tests/unit --cov-report=xml --durations=5
+        run: uv run pytest --durations=5
 
-      - name: Upload coverage to Codecov
-        # only upload coverage from fastest job
-        if: matrix.JOB_MATCHING_DEV_ENV == true
-        uses: codecov/codecov-action@v5.1.1
-        with:
-          files: ./coverage.xml
-          flags: unittests
-          env_vars: OS,PYTHON
-          name: codecov-umbrella
-          fail_ci_if_error: true
-          token: ${{ secrets.CODECOV_TOKEN }}
-          slug: LabAutomationAndScreening/cloud-courier
-
-  executable:
+  build:
     needs: [ test ]
-    strategy:
-      matrix:
-        os:
-          - "ubuntu-24.04"
-          - windows-2022
-        python-version:
-
-          - 3.12.7
-
-    runs-on: ${{ matrix.os }}
-
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4.2.2
-      - name: Install python tooling
-        uses: ./.github/actions/install_deps_uv
-        with:
-          python-version: ${{ matrix.python-version }}
-
-      - name: Build executable
-        run: uv run pyinstaller pyinstaller.spec --log-level=DEBUG
-      - name: Upload executable artifact
-        uses: actions/upload-artifact@v4.6.2
-        with:
-          name: exe-${{ matrix.os }}-${{ matrix.python-version }}
-          path: dist/
-          if-no-files-found: error
-
-
-
-  build-docs:
-    needs: [ lint ]
-    strategy:
-      matrix:
-        python-version:
-
-          - 3.12.7
-
-
     runs-on: ubuntu-24.04
 
     steps:
@@ -152,19 +85,15 @@ jobs:
       - name: Install python tooling
         uses: ./.github/actions/install_deps_uv
         with:
-          python-version: ${{ matrix.python-version }}
+          python-version: 3.12.7
 
-      - name: Build docs
-        working-directory: ./docs
-        run: uv run make html SPHINXOPTS="-W"
-
-
-  required-check:
-    runs-on: ubuntu-24.04
-    needs: [ test, build-docs, executable ]
-    if: always()
-    steps:
-      - name: fail if prior job failure
-        if: needs.test.result != 'success' || needs.build-docs.result != 'success' || needs.executable.result != 'success'
+      - name: Build package
         run: |
-          exit 1
+
+          uv build --no-sources
+
+
+      - name: Publish package
+        run: |
+
+          uv publish --verbose --index testpypi
