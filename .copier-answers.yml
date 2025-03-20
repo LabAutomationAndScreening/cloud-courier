@@ -5,7 +5,7 @@ create_docs: true
 description: Agent to upload files to cloud
 full_repo_url: https://github.com/LabAutomationAndScreening/cloud-courier
 is_frozen_executable: true
-is_open_source: false
+is_open_source: true
 package_name: cloud-courier
 primary_author: Eli Fine
 python_ci_versions:
