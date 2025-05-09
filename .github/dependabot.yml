@@ -12,6 +12,10 @@ updates:
       - dependency-name: "boto3" # boto3 gets patch updates way too frequently and they're usually not important
         update-types:
           - "version-update:semver-patch"
+      - dependency-name: "sphinx*" # read-the-docs uses specific versions of sphinx, so we generally want to stay tightly pinned unless there's a major version change
+        update-types:
+          - "version-update:semver-minor"
+          - "version-update:semver-patch"
 
     groups:
       prod-dependencies:
