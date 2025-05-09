@@ -19,6 +19,7 @@ on:
 
 env:
   PYTHONUNBUFFERED: True
+  PRE_COMMIT_HOME: ${{ github.workspace }}/.precommit_cache
 
 permissions:
     contents: write # needed for mutex
@@ -31,7 +32,7 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4.2.2
         with:
-          ref: ${{ github.ref_name }} # explicitly get the head of
+          ref: ${{ github.ref_name }} # explicitly get the head of the branch, which will include any new commits pushed if this is a dependabot branch
 
       - name: Setup node
         uses: actions/setup-node@v4.3.0
