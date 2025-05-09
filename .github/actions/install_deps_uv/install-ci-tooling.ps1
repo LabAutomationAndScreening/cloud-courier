@@ -21,7 +21,7 @@ if ($args.Count -eq 0) {
 }
 
 
-$env:UV_PYTHON = "$input"
+$env:UV_PYTHON = "$input_arg"
 $env:UV_PYTHON_PREFERENCE="only-system"
 
 & uv tool install 'copier==9.6.0' --with 'copier-templates-extensions==0.3.0'
