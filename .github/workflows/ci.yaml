@@ -18,7 +18,7 @@ jobs:
   get-values:
     uses: ./.github/workflows/get-values.yaml
 
-  pre-commit:
+  lint:
     needs: [ get-values ]
     name: Pre-commit
     runs-on: ubuntu-24.04
