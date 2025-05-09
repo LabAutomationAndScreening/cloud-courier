@@ -6,7 +6,7 @@ set -ex
 
 
 
-curl -LsSf https://astral.sh/uv/0.6.6/install.sh | sh
+curl -LsSf https://astral.sh/uv/0.6.17/install.sh | sh
 uv --version
 # TODO: add uv autocompletion to the shell https://docs.astral.sh/uv/getting-started/installation/#shell-autocompletion
 
@@ -19,8 +19,8 @@ input="${1:-$default_version}"
 export UV_PYTHON="$input"
 export UV_PYTHON_PREFERENCE=only-system
 
-uv tool install 'copier==9.5.0' --with 'copier-templates-extensions==0.3.0'
+uv tool install 'copier==9.6.0' --with 'copier-templates-extensions==0.3.0'
 
-uv tool install 'pre-commit==4.1.0'
+uv tool install 'pre-commit==4.2.0'
 
 uv tool list
