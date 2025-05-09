@@ -9,7 +9,7 @@ updates:
       time: "16:00"
     open-pull-requests-limit: 5
     ignore:
-      - dependency-name: "*"
+      - dependency-name: "boto3" # boto3 gets patch updates way too frequently and they're usually not important
         update-types:
           - "version-update:semver-patch"
 
