@@ -55,7 +55,7 @@ class TestFolderMonitoring(MainLoopMixin):
 
             file_path = Path(self.watch_dir) / f"{uuid.uuid4()}.txt"
             self._start_loop()
-            shutil.copy(original_file_path, file_path)
+            _ = shutil.copy(original_file_path, file_path)
 
         self._fail_if_file_not_uploaded(file_path)
 
@@ -82,7 +82,7 @@ class TestFolderMonitoring(MainLoopMixin):
 
             file_path = Path(self.watch_dir) / f"{uuid.uuid4()}.txt"
             self._start_loop()
-            shutil.move(original_file_path, file_path)
+            _ = shutil.move(original_file_path, file_path)
 
         self._fail_if_file_not_uploaded(file_path)
 

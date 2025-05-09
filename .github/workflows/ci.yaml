@@ -12,10 +12,15 @@ env:
 
 permissions:
     id-token: write
-    contents: write # needed for mutex
+    contents: write # needed for mutex, and updating dependabot branches
+    statuses: write # needed for updating status on Dependabot PRs
 
 jobs:
+  get-values:
+    uses: ./.github/workflows/get-values.yaml
+
   lint:
+    needs: [ get-values ]
     name: Pre-commit
     runs-on: ubuntu-24.04
     steps:
@@ -108,7 +113,7 @@ jobs:
       matrix:
         os:
           - "ubuntu-24.04"
-          - windows-2022
+          - windows-2025
         python-version:
 
           - 3.12.7
@@ -161,10 +166,24 @@ jobs:
 
   required-check:
     runs-on: ubuntu-24.04
-    needs: [ test, build-docs, executable ]
+    needs:
+      - test
+      - get-values
+      - build-docs
+      - executable
     if: always()
     steps:
       - name: fail if prior job failure
         if: needs.test.result != 'success' || needs.build-docs.result != 'success' || needs.executable.result != 'success'
         run: |
           exit 1
+      - name: Mark updated Dependabot commit of devcontainer hash as succeeded
+        if: needs.get-values.outputs.dependabot-commit-created == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh api \
+            -X POST -H "Accept: application/vnd.github.v3+json" \
+            "/repos/${{ github.repository }}/statuses/${{ needs.get-values.outputs.new-dependabot-sha }}" \
+            -f state=success -f context="required-check" -f description="Initial CI run passed" \
+            -f target_url="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
