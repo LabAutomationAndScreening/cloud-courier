@@ -138,6 +138,7 @@ def main():
         action="store_true",
         help="Update the hash in the devcontainer.json file based on all files relevant to devcontainer context",
     )
+    _ = parser.add_argument("--exit-zero", action="store_true", help="Exit with code 0 even if the hash changes")
     args = parser.parse_args()
 
     repo_path = args.folder
@@ -170,7 +171,11 @@ def main():
             print(  # noqa: T201
                 f"Updated {devcontainer_json_file} with the new hash: {overall_checksum_str}"
             )
-            sys.exit(1)  # Exit with non-zero code to indicate changes were made
+            if args.exit_zero:
+                sys.exit(0)
+            else:
+                sys.exit(1)
+
     else:
         print(overall_checksum_str)  # noqa: T201 # print this so that the value can be picked up via STDOUT when calling this in a CI pipeline or as a subprocess
 

@@ -1,0 +1,38 @@
+name: Dependabot Post-Update
+permissions:
+  contents: write        # grant write access so we can push commits
+on:
+  pull_request:
+    types: [opened, synchronize]
+    branches:
+      - main
+
+jobs:
+  post-update:
+    if: ${{ github.actor == 'dependabot[bot]' }}
+    runs-on: ubuntu-24.04
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4.2.2
+        with:
+          persist-credentials: true   # (default) makes GITHUB_TOKEN available for git push
+
+      - name: Configure Git author
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Update devcontainer hash
+        run: python3 .github/workflows/hash_git_files.py . --for-devcontainer-config-update --exit-zero
+
+      - name: Commit & push changes
+        run: |
+          # only commit if there are changes
+          if ! git diff --quiet; then
+            git add .
+            git commit -m "chore: apply post-Dependabot script changes"
+            git push
+          else
+            echo "No changes to commit"
+          fi
