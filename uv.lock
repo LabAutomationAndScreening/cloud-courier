@@ -586,7 +586,7 @@ dev = [
     { name = "boto3-stubs", extras = ["all"], specifier = ">=1.36.3" },
     { name = "pyinstaller", specifier = ">=6.13.0" },
     { name = "pyright", specifier = ">=1.1.403" },
-    { name = "pytest", specifier = ">=8.4.0" },
+    { name = "pytest", specifier = ">=8.4.1" },
     { name = "pytest-cov", specifier = ">=6.2.1" },
     { name = "pytest-mock", specifier = ">=3.14.0" },
     { name = "pytest-randomly", specifier = ">=3.16.0" },
