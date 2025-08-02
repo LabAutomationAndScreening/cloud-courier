@@ -9,6 +9,9 @@ updates:
       time: "16:00"
     open-pull-requests-limit: 5
     ignore:
+      - dependency-name: "*"
+        update-types:
+          - "version-update:semver-patch" # we don't want to be bothered with patch updates for anything except security updates
       - dependency-name: "boto3" # boto3 gets patch updates way too frequently and they're usually not important
         update-types:
           - "version-update:semver-patch"
@@ -22,9 +25,7 @@ updates:
         dependency-type: "production"
         update-types:
           - "minor"
-          - "patch"
       dev-dependencies:
         dependency-type: "development"
         update-types:
           - "minor"
-          - "patch"
