@@ -11,18 +11,21 @@ env:
   PRE_COMMIT_HOME: ${{ github.workspace }}/.precommit_cache
 
 permissions:
-    id-token: write
-    contents: write # needed for mutex, and updating dependabot branches
-    statuses: write # needed for updating status on Dependabot PRs
+  id-token: write # needed to assume OIDC roles (e.g. for downloading from CodeArtifact)
 
 jobs:
   get-values:
     uses: ./.github/workflows/get-values.yaml
+    permissions:
+      contents: write # needed updating dependabot branches
 
   lint:
     needs: [ get-values ]
     name: Pre-commit
     uses: ./.github/workflows/pre-commit.yaml
+    permissions:
+      contents: write # needed for mutex
+      id-token: write # needed to assume OIDC roles (e.g. for downloading from CodeArtifact)
     with:
       python-version: 3.12.7
 
@@ -43,6 +46,8 @@ jobs:
             JOB_MATCHING_DEV_ENV: true
 
     runs-on: ${{ matrix.os }}
+    env:
+      UV_PYTHON: ${{ matrix.python-version }}
     services:
       localstack:
         image: localstack/localstack:4.1.1
@@ -94,6 +99,8 @@ jobs:
           - 3.12.7
 
     runs-on: ${{ matrix.os }}
+    env:
+      UV_PYTHON: ${{ matrix.python-version }}
 
     steps:
       - name: Checkout code
@@ -124,6 +131,8 @@ jobs:
 
 
     runs-on: ubuntu-24.04
+    env:
+      UV_PYTHON: ${{ matrix.python-version }}
 
     steps:
       - name: Checkout code
@@ -141,6 +150,8 @@ jobs:
 
   required-check:
     runs-on: ubuntu-24.04
+    permissions:
+      statuses: write # needed for updating status on Dependabot PRs
     needs:
       - test
       - get-values
