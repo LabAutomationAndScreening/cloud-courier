@@ -71,6 +71,7 @@ repos:
               template/.copier-answers.yml.jinja-base|
               template/template/.copier-answers.yml.jinja|
               template/.copier-answers.yml.jinja|
+              .*generated/graphql.ts|
               .devcontainer/devcontainer-lock.json|
               .copier-answers.yml|
               .*\.xml|
