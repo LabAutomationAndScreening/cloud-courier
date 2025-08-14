@@ -76,4 +76,8 @@ dist
 *.log
 **/logs/log*.txt
 
+# macOS dev cleanliness
+*.DS_Store
+.DS_Store
+
 # Ignores specific to this repository
