@@ -9,9 +9,9 @@ from pathlib import Path
 
 UV_VERSION = "0.8.4"
 PNPM_VERSION = "10.14.0"
-COPIER_VERSION = "9.8.0"
+COPIER_VERSION = "9.9.1"
 COPIER_TEMPLATE_EXTENSIONS_VERSION = "0.3.2"
-PRE_COMMIT_VERSION = "4.2.0"
+PRE_COMMIT_VERSION = "4.3.0"
 GITHUB_WINDOWS_RUNNER_BIN_PATH = r"C:\Users\runneradmin\.local\bin"
 INSTALL_SSM_PLUGIN_BY_DEFAULT = False
 parser = argparse.ArgumentParser(description="Install CI tooling for the repo")
