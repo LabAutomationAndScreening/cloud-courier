@@ -1,5 +1,5 @@
 # Changes here will be overwritten by Copier
-_commit: v0.0.47
+_commit: v0.0.49
 _src_path: gh:LabAutomationAndScreening/copier-python-package-template
 create_docs: true
 description: Agent to upload files to cloud
@@ -15,7 +15,7 @@ python_package_registry: PyPI
 python_version: 3.12.7
 repo_name: cloud-courier
 repo_org_name: LabAutomationAndScreening
-ssh_port_number: 61020
+ssh_port_number: 61335
 use_codecov: true
 use_windows_in_ci: false
 use_windows_in_exe_ci: true

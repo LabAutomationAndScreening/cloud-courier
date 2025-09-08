@@ -13,7 +13,7 @@ services:
       - python_venv:/workspaces/cloud-courier/.venv
     command: sleep infinity
     ports:
-      - "61020:2222"
+      - "61335:2222"
     environment:
       - AWS_PROFILE=localstack
       - AWS_DEFAULT_REGION=us-east-1
