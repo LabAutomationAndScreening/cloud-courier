@@ -42,7 +42,7 @@ repos:
 
   # Reformatting (should generally come before any file format or other checks, because reformatting can change things)
   - repo: https://github.com/crate-ci/typos
-    rev: 7fb6e0951ad91e4772a2470012fc1ae621016b80  # frozen: v1
+    rev: 65a25783d8705c6a72d9fead19c44d87b4ff03c3  # frozen: v1
     hooks:
       - id: typos
         exclude:
@@ -218,7 +218,7 @@ repos:
         exclude: docs/.*\.rst$
 
   - repo: https://github.com/hadolint/hadolint
-    rev: c3dc18df7a501f02a560a2cc7ba3c69a85ca01d3 # frozen: v2.13.1-beta
+    rev: 87de847754330ad47ae16bdfe2d1a757ccb4b4d4  # frozen: v2.13.1
     hooks:
       - id: hadolint-docker
         name: Lint Dockerfiles
@@ -226,7 +226,7 @@ repos:
         description: Runs hadolint to lint Dockerfiles
 
   - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: 54a455f7ce629598b7535ff828fd5fb796f4b83f  # frozen: v0.12.9
+    rev: db90487f48a9dd992d243ef63c156eaffddeaf28  # frozen: v0.12.11
     hooks:
       - id: ruff
         name: ruff-src

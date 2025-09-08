@@ -27,17 +27,17 @@ dependencies = [
 dev = [
     # Specific to this repository
 
+
     "boto3-stubs[all]>=1.40.6",
     "pytest-mock>=3.14.0",
     "time-machine>=2.17.0",
     "pytest-timeout>=2.4.0",
     "sphinx-togglebutton==0.3.2",
 
-
     # Managed by upstream template
-    "pyright>=1.1.403",
-    "pytest>=8.4.1",
-    "pytest-cov>=6.2.1",
+    "pyright>=1.1.405",
+    "pytest>=8.4.2",
+    "pytest-cov>=6.3.0",
     "pytest-randomly>=3.16.0",
     "sphinx==8.1.3",
     "pyinstaller>=6.15.0",
