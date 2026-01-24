@@ -9,6 +9,9 @@ on:
       dependabot-commit-created:
         description: whether or not a commit was created on a dependabot branch
         value: ${{ jobs.get-values.outputs.dependabot-commit-created }}
+      pr-short-num:
+        description: the last two digits of the PR number (to be used for fixed width naming, like Pulumi stacks)
+        value: ${{ jobs.get-values.outputs.pr-short-num }}
 
 env:
   PYTHONUNBUFFERED: True
@@ -19,13 +22,22 @@ permissions:
 jobs:
   get-values:
     runs-on: ubuntu-24.04
+    timeout-minutes: 2
     outputs:
       new-dependabot-sha: ${{ steps.update-hash.outputs.new-sha }}
       dependabot-commit-created: ${{ steps.update-hash.outputs.commit-created }}
       pr-short-num: ${{ steps.find-pr-num.outputs.number }}
     steps:
+      - name: Display full GitHub context
+        run: |
+          jq . <<'JSON'
+          ${{ toJSON(github) }}
+          JSON
+
       - name: Checkout code
-        uses: actions/checkout@v5.0.0
+        uses: actions/checkout@v6.0.1
+        with:
+          persist-credentials: false
 
       - name: Update Devcontainer Hash
         if: ${{ github.actor == 'dependabot[bot]' && github.event_name == 'push' }}

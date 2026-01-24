@@ -3,8 +3,10 @@
 [![uv](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/uv/main/assets/badge/v0.json)](https://github.com/astral-sh/uv)
 [![Checked with pyright](https://microsoft.github.io/pyright/img/pyright_badge.svg)](https://microsoft.github.io/pyright/)
 [![Actions status](https://github.com/LabAutomationAndScreening/cloud-courier/actions/workflows/ci.yaml/badge.svg?branch=main)](https://github.com/LabAutomationAndScreening/cloud-courier/actions)
-[![Open in Dev Containers](https://img.shields.io/static/v1?label=Dev%20Containers&message=Open&color=blue)](https://vscode.dev/redirect?url=vscode://ms-vscode-remote.remote-containers/cloneInVolume?url=https://github.com/LabAutomationAndScreening/cloud-courier)[![Codecov](https://codecov.io/gh/LabAutomationAndScreening/cloud-courier/branch/main/graph/badge.svg)](https://codecov.io/gh/LabAutomationAndScreening/cloud-courier)
+[![Open in Dev Containers](https://img.shields.io/static/v1?label=Dev%20Containers&message=Open&color=blue)](https://vscode.dev/redirect?url=vscode://ms-vscode-remote.remote-containers/cloneInVolume?url=https://github.com/LabAutomationAndScreening/cloud-courier)
+[![Codecov](https://codecov.io/gh/LabAutomationAndScreening/cloud-courier/branch/main/graph/badge.svg)](https://codecov.io/gh/LabAutomationAndScreening/cloud-courier)
 [![Documentation Status](https://readthedocs.org/projects/cloud-courier/badge/?version=latest)](https://cloud-courier.readthedocs.io/en/latest/?badge=latest)
+[![OpenIssues](https://isitmaintained.com/badge/open/LabAutomationAndScreening/cloud-courier.svg)](https://isitmaintained.com/project/LabAutomationAndScreening/cloud-courier)
 
 # Usage
 Documentation is hosted on [ReadTheDocs](https://cloud-courier.readthedocs.io/en/latest/?badge=latest).

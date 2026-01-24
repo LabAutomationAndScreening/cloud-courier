@@ -47,6 +47,7 @@ jobs:
             JOB_MATCHING_DEV_ENV: true
 
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 8
     env:
       UV_PYTHON: ${{ matrix.python-version }}
     services:
@@ -58,10 +59,9 @@ jobs:
           AWS_ACCESS_KEY_ID: test
           AWS_SECRET_ACCESS_KEY: test
           SERVICES: s3,sts,cloudwatch,ssm,events,iam
-
     steps:
       - name: Checkout code
-        uses: actions/checkout@v5.0.0
+        uses: actions/checkout@v6.0.1
 
       - name: Install python tooling
         uses: ./.github/actions/install_deps
@@ -100,12 +100,13 @@ jobs:
           - 3.12.7
 
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 8
     env:
       UV_PYTHON: ${{ matrix.python-version }}
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v5.0.0
+        uses: actions/checkout@v6.0.1
       - name: Install python tooling
         uses: ./.github/actions/install_deps
         with:
@@ -114,7 +115,7 @@ jobs:
       - name: Build executable
         run: uv run pyinstaller pyinstaller.spec --log-level=DEBUG
       - name: Upload executable artifact
-        uses: actions/upload-artifact@v4.6.2
+        uses: actions/upload-artifact@v6.0.0
         with:
           name: exe-${{ matrix.os }}-${{ matrix.python-version }}
           path: dist/
@@ -132,12 +133,13 @@ jobs:
 
 
     runs-on: ubuntu-24.04
+    timeout-minutes: 8
     env:
       UV_PYTHON: ${{ matrix.python-version }}
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v5.0.0
+        uses: actions/checkout@v6.0.1
 
       - name: Install python tooling
         uses: ./.github/actions/install_deps
@@ -159,6 +161,7 @@ jobs:
       - build-docs
       - executable
     if: always()
+    timeout-minutes: 2
     steps:
       - name: fail if prior job failure
         if: needs.test.result != 'success' || needs.build-docs.result != 'success' || needs.executable.result != 'success'
