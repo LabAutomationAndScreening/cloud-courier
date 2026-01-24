@@ -17,6 +17,7 @@ services:
     environment:
       - AWS_PROFILE=localstack
       - AWS_DEFAULT_REGION=us-east-1
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
 
   localstack:
     image: localstack/localstack:4.1.1 # no known reason for not using newer versions, just pinning for best practice

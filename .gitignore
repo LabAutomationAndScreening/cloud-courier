@@ -44,8 +44,6 @@ pytest.log
 tests/__coverage__
 test/__coverage__
 coverage-report-pytest
-.pytest_cache/
-.mypy_cache/
 .coverage
 .coverage.*
 coverage.xml
@@ -79,7 +77,6 @@ dist
 **/logs/*.log.*
 
 # macOS dev cleanliness
-*.DS_Store
-.DS_Store
+**/.DS_Store
 
 # Ignores specific to this repository

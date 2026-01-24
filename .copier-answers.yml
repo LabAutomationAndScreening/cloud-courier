@@ -1,14 +1,18 @@
 # Changes here will be overwritten by Copier
-_commit: v0.0.50
+_commit: v0.0.59
 _src_path: gh:LabAutomationAndScreening/copier-python-package-template
+configure_python_asyncio: false
+configure_vcrpy: false
 create_docs: true
 description: Agent to upload files to cloud
 full_repo_url: https://github.com/LabAutomationAndScreening/cloud-courier
 install_aws_ssm_port_forwarding_plugin: false
+install_claude_cli: true
 is_frozen_executable: true
 is_open_source: true
 package_name: cloud-courier
 primary_author: Eli Fine
+pull_from_ecr: false
 python_ci_versions:
 - 3.12.7
 python_package_registry: PyPI
