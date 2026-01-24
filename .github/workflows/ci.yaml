@@ -161,6 +161,7 @@ jobs:
       statuses: write # needed for updating status on Dependabot PRs
     needs:
       - get-values
+      - lint
       - test
       - build-docs
       - executable
@@ -172,6 +173,7 @@ jobs:
           failure_pattern="^(failure|cancelled)$"
 
           if [[ "${{ needs.get-values.result }}" =~ $failure_pattern ]] ||
+              [[ "${{ needs.lint.result }}" =~ $failure_pattern ]] ||
               [[ "${{ needs.build-docs.result }}" =~ $failure_pattern ]] ||
               [[ "${{ needs.executable.result }}" =~ $failure_pattern ]] ||
               [[ "${{ needs.test.result }}" =~ $failure_pattern ]]; then
