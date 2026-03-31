@@ -32,7 +32,7 @@ def _get_ssm_param_values(ssm_client: SSMClient, prefix: str) -> dict[str, str]:
         response = ssm_client.describe_parameters(
             ParameterFilters=[{"Key": "Name", "Option": "BeginsWith", "Values": [prefix]}],
             MaxResults=50,  # AWS allows up to 50 results per call
-            NextToken=next_token if next_token else "",
+            NextToken=next_token or "",
         )
 
         # Add parameters from this page
