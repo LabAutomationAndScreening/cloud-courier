@@ -51,7 +51,7 @@ jobs:
       contents: write # needed for mutex
       id-token: write # needed to assume OIDC roles (e.g. for downloading from CodeArtifact)
     with:
-      python-version: 3.12.7
+      python-version: 3.13.9
 
   test:
     needs:
@@ -65,11 +65,11 @@ jobs:
 
         python-version:
 
-          - 3.12.7
+          - 3.13.9
 
         include:
           - os: "ubuntu-24.04"
-            python-version: "3.12.7"
+            python-version: "3.13.9"
             JOB_MATCHING_DEV_ENV: true
 
     runs-on: ${{ matrix.os }}
@@ -129,7 +129,7 @@ jobs:
           - windows-2025
         python-version:
 
-          - 3.12.7
+          - 3.13.9
 
     runs-on: ${{ matrix.os }}
     timeout-minutes: 8
@@ -166,7 +166,7 @@ jobs:
       matrix:
         python-version:
 
-          - 3.12.7
+          - 3.13.9
 
 
     runs-on: ubuntu-24.04

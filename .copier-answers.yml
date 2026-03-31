@@ -14,9 +14,9 @@ package_name: cloud-courier
 primary_author: Eli Fine
 pull_from_ecr: false
 python_ci_versions:
-- 3.12.7
+- 3.13.9
 python_package_registry: PyPI
-python_version: 3.12.7
+python_version: 3.13.9
 repo_name: cloud-courier
 repo_org_name: LabAutomationAndScreening
 ssh_port_number: 61335

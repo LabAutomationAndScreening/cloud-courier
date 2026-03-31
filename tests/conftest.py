@@ -25,7 +25,7 @@ def localstack_profile(mocker: MockerFixture) -> None:
 
 
 @pytest.fixture
-def flag_file_dir() -> Generator[str, None, None]:
+def flag_file_dir() -> Generator[str]:
     with tempfile.TemporaryDirectory() as temp_dir:
         yield temp_dir
 

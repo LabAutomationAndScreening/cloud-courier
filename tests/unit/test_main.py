@@ -63,7 +63,7 @@ class MainMixin:
     def _setup(
         self,
         mock_path_to_aws_credentials: None,  # noqa: ARG002 # pytest.usefixture cannot be used on a fixturet
-        flag_file_dir: Generator[str, None, None],
+        flag_file_dir: Generator[str],
     ):
         self.flag_file_dir = str(flag_file_dir)
 
