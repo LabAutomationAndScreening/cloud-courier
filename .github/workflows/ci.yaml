@@ -5,6 +5,7 @@ on:
     branches-ignore:
       - 'gh-readonly-queue/**' # don't run (again) when on these special branches created during merge groups; the `on: merge_group` already triggers it.
   merge_group:
+  pull_request:
 
 env:
   PYTHONUNBUFFERED: True
@@ -18,11 +19,32 @@ jobs:
   get-values:
     uses: ./.github/workflows/get-values.yaml
     permissions:
-      contents: write # needed updating dependabot branches
+      contents: write # needed for updating dependabot branches
+
+  check-skip-duplicate:
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      pull-requests: read # needed to check if PR exists for current branch
+    outputs:
+      should-run: ${{ steps.check.outputs.should-run }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6.0.2
+        with:
+          persist-credentials: false
+      - id: check
+        uses: ./.github/actions/check-skip-duplicates
+
+  confirm-on-tagged-copier-template:
+    if: ${{ github.event_name == 'pull_request' || github.event_name == 'merge_group' }}
+    uses: ./.github/workflows/confirm-on-tagged-copier-template.yaml
 
   lint:
     needs:
       - get-values
+      - check-skip-duplicate
+    if: needs.check-skip-duplicate.outputs.should-run == 'true'
     name: Pre-commit
     uses: ./.github/workflows/pre-commit.yaml
     permissions:
@@ -34,6 +56,8 @@ jobs:
   test:
     needs:
       - lint
+      - check-skip-duplicate
+    if: needs.check-skip-duplicate.outputs.should-run == 'true'
     strategy:
       matrix:
         os:
@@ -63,17 +87,20 @@ jobs:
           SERVICES: s3,sts,cloudwatch,ssm,events,iam
     steps:
       - name: Checkout code
-        uses: actions/checkout@v6.0.1
+        uses: actions/checkout@v6.0.2
 
       - name: Install python tooling
         uses: ./.github/actions/install_deps
         with:
+          skip-installing-ssm-plugin-manager: true
+          skip-installing-pulumi-cli: true
           python-version: ${{ matrix.python-version }}
 
       - name: Create AWS profile
         run: |
           sh .devcontainer/create-aws-profile.sh
           cat ~/.aws/config
+
       - name: Unit test
         run: uv run pytest tests/unit --cov-report=xml --durations=5
 
@@ -93,6 +120,8 @@ jobs:
   executable:
     needs:
       - test
+      - check-skip-duplicate
+    if: needs.check-skip-duplicate.outputs.should-run == 'true'
     strategy:
       matrix:
         os:
@@ -109,16 +138,18 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v6.0.1
+        uses: actions/checkout@v6.0.2
       - name: Install python tooling
         uses: ./.github/actions/install_deps
         with:
+          skip-installing-ssm-plugin-manager: true
+          skip-installing-pulumi-cli: true
           python-version: ${{ matrix.python-version }}
 
       - name: Build executable
         run: uv run pyinstaller pyinstaller.spec --log-level=DEBUG
       - name: Upload executable artifact
-        uses: actions/upload-artifact@v6.0.0
+        uses: actions/upload-artifact@v7.0.0
         with:
           name: exe-${{ matrix.os }}-${{ matrix.python-version }}
           path: dist/
@@ -129,6 +160,8 @@ jobs:
   build-docs:
     needs:
       - lint
+      - check-skip-duplicate
+    if: needs.check-skip-duplicate.outputs.should-run == 'true'
     strategy:
       matrix:
         python-version:
@@ -143,11 +176,13 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v6.0.1
+        uses: actions/checkout@v6.0.2
 
       - name: Install python tooling
         uses: ./.github/actions/install_deps
         with:
+          skip-installing-ssm-plugin-manager: true
+          skip-installing-pulumi-cli: true
           python-version: ${{ matrix.python-version }}
 
       - name: Build docs
@@ -155,33 +190,49 @@ jobs:
         run: uv run make html SPHINXOPTS="-W"
 
 
-  required-check:
+  workflow-summary:
     runs-on: ubuntu-24.04
-    permissions:
-      statuses: write # needed for updating status on Dependabot PRs
+    timeout-minutes: 2
     needs:
       - get-values
+      - check-skip-duplicate
       - lint
       - test
       - build-docs
       - executable
+      - confirm-on-tagged-copier-template
+    permissions:
+      statuses: write # needed for updating status on Dependabot PRs
     if: always()
-    timeout-minutes: 2
     steps:
       - name: fail if prior job failure
         run: |
-          failure_pattern="^(failure|cancelled)$"
+          success_pattern="^(skipped|success)$" # these are the possibilities: https://docs.github.com/en/actions/reference/workflows-and-actions/contexts#needs-context
 
-          if [[ "${{ needs.get-values.result }}" =~ $failure_pattern ]] ||
-              [[ "${{ needs.lint.result }}" =~ $failure_pattern ]] ||
-              [[ "${{ needs.build-docs.result }}" =~ $failure_pattern ]] ||
-              [[ "${{ needs.executable.result }}" =~ $failure_pattern ]] ||
-              [[ "${{ needs.test.result }}" =~ $failure_pattern ]]; then
-              echo "❌ One or more jobs failed or were cancelled"
+          if [[ ! "${{ needs.get-values.result }}" =~ $success_pattern ]] ||
+            [[ ! "${{ needs.check-skip-duplicate.result }}" =~ $success_pattern ]] ||
+            [[ ! "${{ needs.lint.result }}" =~ $success_pattern ]] ||
+            [[ ! "${{ needs.build-docs.result }}" =~ $success_pattern ]] ||
+            [[ ! "${{ needs.executable.result }}" =~ $success_pattern ]] ||
+            [[ ! "${{ needs.test.result }}" =~ $success_pattern ]] ||
+            [[ ! "${{ needs.confirm-on-tagged-copier-template.result }}" =~ $success_pattern ]]; then
+            echo "❌ One or more jobs did not finish with skipped or success"
             exit 1
           fi
-          echo "✅ All jobs completed successfully or were skipped"
-      - name: Mark updated Dependabot commit of devcontainer hash as succeeded
+          echo "✅ All jobs finished with skipped or success"
+
+      - name: Mark the required-check as succeeded so the PR can be merged
+        if: ${{ github.event_name == 'pull_request' || github.event_name == 'merge_group' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh api \
+            -X POST -H "Accept: application/vnd.github.v3+json" \
+            "${{ github.event.pull_request.statuses_url }}" \
+            -f state=success -f context="required-check" -f description="✅ All required checks passed in the job triggered by pull_request" \
+            -f target_url="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+
+      - name: Mark updated dependabot hash commit as succeeded
         if: needs.get-values.outputs.dependabot-commit-created == 'true'
         env:
           GH_TOKEN: ${{ github.token }}

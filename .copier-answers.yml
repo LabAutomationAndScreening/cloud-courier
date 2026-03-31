@@ -1,5 +1,5 @@
 # Changes here will be overwritten by Copier
-_commit: v0.0.59
+_commit: v0.0.62-2-g93c5fcb
 _src_path: gh:LabAutomationAndScreening/copier-python-package-template
 configure_python_asyncio: false
 configure_vcrpy: false
