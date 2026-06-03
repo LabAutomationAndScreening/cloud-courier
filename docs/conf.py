@@ -7,7 +7,7 @@
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#project-information
 
 project = "cloud-courier"
-copyright = "2024, Eli Fine"
+copyright = "2024, Eli Fine"  # noqa: A001  # Sphinx requires this exact variable name
 author = "Eli Fine"
 
 # -- General configuration ---------------------------------------------------
