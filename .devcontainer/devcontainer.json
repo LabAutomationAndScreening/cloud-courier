@@ -18,13 +18,6 @@
       // view latest version https://raw.githubusercontent.com/aws/aws-cli/v2/CHANGELOG.rst
       "version": "2.34.34"
     },
-    "ghcr.io/devcontainers/features/python:1.8.0": {
-      // https://github.com/devcontainers/features/blob/main/src/python/devcontainer-feature.json
-      "version": "3.13.9",
-      "installTools": false,
-      "optimize": true,
-      "enableShared": true
-    },
     // https://github.com/anthropics/devcontainer-features/blob/main/src/claude-code/devcontainer-feature.json
     "ghcr.io/anthropics/devcontainer-features/claude-code:1.0.5": {},
   },
@@ -35,18 +28,16 @@
         "-AmazonWebServices.aws-toolkit-vscode", // the AWS CLI feature installs this automatically, but it's causing problems in VS Code
         // basic tooling
         // "eamodio.gitlens@15.5.1",
-        "coderabbit.coderabbit-vscode@0.19.2",
+        "coderabbit.coderabbit-vscode@0.20.7",
         "ms-vscode.live-server@0.5.2025051301",
         "MS-vsliveshare.vsliveshare@1.0.5905",
-        "github.copilot@1.388.0",
-        "github.copilot-chat@0.44.2",
-        "anthropic.claude-code@2.1.145",
+        "anthropic.claude-code@2.1.205",
 
         // Python
-        "ms-python.python@2026.5.2026032701",
-        "ms-python.vscode-pylance@2026.2.100",
+        "ms-python.python@2026.5.2026052901",
+        "meta.pyrefly@1.1.9001",
         "ms-vscode-remote.remote-containers@0.414.0",
-        "charliermarsh.ruff@2026.44.0",
+        "charliermarsh.ruff@2026.56.0",
 
         // Misc file formats
         "bierner.markdown-mermaid@1.29.0",
@@ -65,9 +56,12 @@
           "editor.formatOnSave": true,
           "editor.defaultFormatter": "charliermarsh.ruff"
         },
+        "python.terminal.activateEnvironment": false, // uv manages the environment
         "ruff.nativeServer": "on",
         // TODO: see if there's a way to specify different configurations for different folders
-        "ruff.configuration": "/workspaces/cloud-courier/ruff-non-src.toml", // use the non-src configuration since it's less restrictive and won't show false positives and underline things
+        "ruff.configuration": "/workspaces/cloud-courier/.config/ruff-non-src.toml", // use the non-src configuration since it's less restrictive and won't show false positives and underline things
+        "python.pyrefly.configPath": "/workspaces/cloud-courier/.config/pyrefly.toml",
+        "prettier.configPath": ".config/.prettierrc",
         "[jsonc][json][javascript][typescript][graphql][css][scss][html][vue]": {
           "editor.defaultFormatter": "esbenp.prettier-vscode",
           "editor.formatOnSave": true

@@ -179,7 +179,10 @@ class MainLoop:
                     "MetricName": HEARTBEAT_METRIC_NAME,
                     "Dimensions": [
                         {"Name": "Application", "Value": "CloudCourier"},
-                        {"Name": CLOUDWATCH_INSTANCE_ID_DIMENSION_NAME, "Value": self.config.role_name},
+                        {
+                            "Name": CLOUDWATCH_INSTANCE_ID_DIMENSION_NAME,
+                            "Value": self.config.role_name,
+                        },
                     ],
                     "Timestamp": datetime.datetime.now(tz=datetime.UTC),
                     "Value": 1,
@@ -212,7 +215,8 @@ class MainLoop:
             if file.is_file():
                 # This isn't truly a FileClosedEvent, but it's easier to just have a single codepath for all uploading
                 event_info = FileEventInfo(
-                    file_system_event=FileClosedEvent(src_path=str(file)), folder_config=folder_config
+                    file_system_event=FileClosedEvent(src_path=str(file)),
+                    folder_config=folder_config,
                 )
                 self.file_system_events.put(event_info)
                 if self.create_duplicate_event_stream_for_test_monitoring:

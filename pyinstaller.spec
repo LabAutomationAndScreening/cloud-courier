@@ -20,7 +20,7 @@ a = Analysis(
     [os.path.join("src", "entrypoint.py")],
     pathex=["dist"],
     binaries=[],
-    datas=[],
+    datas=[],  # spellchecker:disable-line
     hiddenimports=[
         "eventlet.hubs.epolls",
         "eventlet.hubs.kqueue",
@@ -69,7 +69,7 @@ coll = COLLECT(
     exe,
     a.binaries,
     a.zipfiles,
-    a.datas,
+    a.datas,  # spellchecker:disable-line
     strip=False,
     upx=use_upx,
     upx_exclude=[

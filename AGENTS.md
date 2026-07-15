@@ -46,6 +46,7 @@ This project is a Python library.
 
 ### Python Testing
 
+- Keep every behavioral `assert` inside the test function body — never factor assertions into helper functions or fixtures. pytest's assertion rewriting (the rich failure diff) only applies to asserts located in the test module (or conftest/registered plugins), so an `assert` hidden in an ordinary helper reports an opaque failure with no useful diff.
 - When using `mocker.spy` on a class-level method (including inherited ones), the spy records the unbound call, so assertions need `ANY` as the first argument to match self: `spy.assert_called_once_with(ANY, expected_arg)`
 - Before writing new mock/spy helpers, check the `tests/unit/` folder for pre-built helpers in files like `fixtures.py` or `*mocks.py`
 - When a test needs a fixture only for its side effects (not its return value), use `@pytest.mark.usefixtures(fixture_name.__name__)` instead of adding an unused parameter with a noqa comment
@@ -167,4 +168,27 @@ bd export -o [relative path to repository root]/.claude/.beads/issues-dump.jsonl
 
 For more details, see README.md and docs/QUICKSTART.md.
 
+# Copier-Managed Files
+
+Files generated from upstream copier templates are listed in `.config/.copier-managed-files.json` (if present).
+The manifest has a `templates` array — one entry per template in the chain. Each entry has `src` (the template URL),
+`managed_files` (files it placed), and optionally `parent_src` (the template that generated it, forming the chain).
+
+When a file appears in multiple entries, the **last entry in the array** is the authoritative owner for backporting —
+it is the most-specific template in the chain. `parent_src` lets you trace the full chain upward to the root.
+
+When reviewing a PR that modifies a file listed in the manifest, check whether the change is generic enough to
+backport to the owning template. If so, add a single summary comment (not one per file) noting which files are
+template-managed and which template repo the changes should be backported to.
+
 <!-- END BEADS INTEGRATION -->
+
+<!--
+============== WARNING ==============================================================================
+File is managed by copier template: gh:LabAutomationAndScreening/copier-base-template.git
+See .config/.copier-managed-files.json for details.
+
+You are welcome to make changes to this file in your repo if they are custom to your project,
+but if the change should be shared with other projects, please backport it to the template repo.
+=====================================================================================================
+-->
