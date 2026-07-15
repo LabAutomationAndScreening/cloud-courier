@@ -20,7 +20,7 @@ a = Analysis(
     [os.path.join("src", "entrypoint.py")],
     pathex=["dist"],
     binaries=[],
-    datas=[],  # spellchecker:disable-line
+    datas=[],  # spellchecker:disable-line # not sure why pyinstaller uses `datas` as the spelling
     hiddenimports=[
         "eventlet.hubs.epolls",
         "eventlet.hubs.kqueue",
@@ -69,7 +69,7 @@ coll = COLLECT(
     exe,
     a.binaries,
     a.zipfiles,
-    a.datas,  # spellchecker:disable-line
+    a.datas,  # spellchecker:disable-line # not sure why pyinstaller uses `datas` as the spelling
     strip=False,
     upx=use_upx,
     upx_exclude=[
