@@ -1,0 +1,167 @@
+# ============== WARNING ==============================================================================
+# File is managed by copier template: gh:LabAutomationAndScreening/copier-python-package-template
+# See .config/.copier-managed-files.json for details.
+#
+# You are welcome to make changes to this file in your repo if they are custom to your project,
+# but if the change should be shared with other projects, please backport it to the template repo.
+# =====================================================================================================
+name: Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Dry run (test the workflow, skip actual release)"
+        type: boolean
+        default: false
+
+env:
+  PYTHONUNBUFFERED: True
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+permissions:
+  contents: read # need to explicitly provide this whenever defining permissions because the default value is 'none' for anything not explicitly set when permissions are defined
+
+jobs:
+  guard:
+    name: Guard on a passing CI run
+    runs-on: ubuntu-24.04
+    timeout-minutes: 2
+    permissions:
+      contents: read # needed for checkout
+      actions: read # needed to query CI workflow runs
+    outputs:
+      version: ${{ steps.get-version.outputs.version }}
+      ci-run-id: ${{ steps.get-ci-run-id.outputs.ci-run-id }}
+    steps:
+      - name: Fail if real release is not on main
+        if: ${{ !inputs.dry_run && github.ref != 'refs/heads/main' }}
+        run: |
+          echo "Real releases must run from main. Current ref: ${{ github.ref }}"
+          exit 1
+      - name: Get CI run ID for this commit
+        id: get-ci-run-id
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          ALL_RUNS=$(gh api "/repos/${{ github.repository }}/actions/workflows/ci.yaml/runs?head_sha=${{ github.sha }}")
+          echo "All ci.yaml runs for ${{ github.sha }}:"
+          echo "$ALL_RUNS" | jq '[.workflow_runs[] | {id, status, conclusion, created_at}]'
+          LATEST_RUN=$(echo "$ALL_RUNS" | jq '.workflow_runs | first')
+          RUN_ID=$(echo "$LATEST_RUN" | jq -r '.id')
+          STATUS=$(echo "$LATEST_RUN" | jq -r '.status')
+          CONCLUSION=$(echo "$LATEST_RUN" | jq -r '.conclusion')
+          echo "Most recent ci.yaml run: id=$RUN_ID status=$STATUS conclusion=$CONCLUSION"
+          if [ "$STATUS" != "completed" ] || [ "$CONCLUSION" != "success" ]; then
+            echo "Most recent ci.yaml run has not completed successfully. Wait for CI to pass before releasing."
+            exit 1
+          fi
+          echo "ci-run-id=$RUN_ID" >> $GITHUB_OUTPUT
+      - name: Verify workflow-summary passed in CI run
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          JOBS=$(gh api "/repos/${{ github.repository }}/actions/runs/${{ steps.get-ci-run-id.outputs.ci-run-id }}/jobs")
+          echo "Jobs in CI run ${{ steps.get-ci-run-id.outputs.ci-run-id }}:"
+          echo "$JOBS" | jq '[.jobs[] | {name, conclusion}]'
+          CONCLUSION=$(echo "$JOBS" | jq -r '.jobs[] | select(.name == "workflow-summary") | .conclusion')
+          echo "workflow-summary conclusion: $CONCLUSION"
+          if [ "$CONCLUSION" != "success" ] && [ "${{ inputs.dry_run }}" != "true" ]; then
+            echo "workflow-summary did not succeed. Wait for CI to pass before releasing."
+            exit 1
+          fi
+      - name: Checkout code
+        uses: actions/checkout@v6.0.2
+      - name: Setup python
+        uses: actions/setup-python@v6.2.0
+        with:
+          python-version: 3.13.9
+      - name: Extract project version
+        id: get-version
+        run: |
+          VERSION=$(python3 .github/workflows/extract_project_version.py pyproject.toml)
+          echo "Project version: $VERSION"
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+      - name: Check version tag does not already exist
+        run: |
+          if python3 .github/workflows/git_tag.py --version "${{ steps.get-version.outputs.version }}" --confirm-tag-not-present; then
+            echo "Tag v${{ steps.get-version.outputs.version }} does not exist yet."
+          else
+            if [ "${{ inputs.dry_run }}" = "true" ]; then
+              echo "Tag v${{ steps.get-version.outputs.version }} already exists (dry run, continuing)."
+            else
+              echo "Tag v${{ steps.get-version.outputs.version }} already exists. Bump the version before releasing."
+              exit 1
+            fi
+          fi
+
+
+  create-tag:
+    name: Create the git tag
+    if: ${{ !inputs.dry_run }}
+    timeout-minutes: 8
+    needs:
+      - guard
+    permissions:
+      contents: write # needed to push the tag
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6.0.2
+      - name: Setup python
+        uses: actions/setup-python@v6.2.0
+        with:
+          python-version: 3.13.9
+      - name: Confirm tag not already present
+        run: python3 ./.github/workflows/git_tag.py --version "${{ needs.guard.outputs.version }}" --confirm-tag-not-present
+      - name: Create tag
+        run: python3 ./.github/workflows/git_tag.py --version "${{ needs.guard.outputs.version }}" --push-tag-to-remote
+
+
+  release:
+    name: Create GitHub Release
+    if: ${{ !inputs.dry_run }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 2
+    needs:
+      - create-tag
+      - guard
+    permissions:
+      contents: write # needed to create GitHub releases
+      actions: read # needed to download the executable artifacts from the CI run
+    steps:
+      - name: Download executable artifact (ubuntu-24.04 py3.13.9)
+        uses: actions/download-artifact@v8.0.1
+        with:
+          name: exe-ubuntu-24.04-3.13.9
+          path: artifacts/ubuntu-24.04-3.13.9
+          run-id: ${{ needs.guard.outputs.ci-run-id }}
+          github-token: ${{ github.token }}
+      - name: Package executable (ubuntu-24.04 py3.13.9)
+        shell: bash
+        run: tar -cf "cloud-courier-ubuntu-24.04-3.13.9-v${{ needs.guard.outputs.version }}.tar" -C "artifacts/ubuntu-24.04-3.13.9" .
+
+      - name: Download executable artifact (windows-2025-vs2026 py3.13.9)
+        uses: actions/download-artifact@v8.0.1
+        with:
+          name: exe-windows-2025-vs2026-3.13.9
+          path: artifacts/windows-2025-vs2026-3.13.9
+          run-id: ${{ needs.guard.outputs.ci-run-id }}
+          github-token: ${{ github.token }}
+      - name: Package executable (windows-2025-vs2026 py3.13.9)
+        shell: bash
+        run: (cd "artifacts/windows-2025-vs2026-3.13.9" && zip -r "../../cloud-courier-windows-2025-vs2026-3.13.9-v${{ needs.guard.outputs.version }}.zip" .)
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v3.0.0
+        with:
+          tag_name: v${{ needs.guard.outputs.version }}
+          name: cloud-courier v${{ needs.guard.outputs.version }}
+          generate_release_notes: true
+          fail_on_unmatched_files: true
+          files: |
+            cloud-courier-ubuntu-24.04-3.13.9-v${{ needs.guard.outputs.version }}.tar
+            cloud-courier-windows-2025-vs2026-3.13.9-v${{ needs.guard.outputs.version }}.zip

@@ -1,3 +1,10 @@
+# ============== WARNING ==============================================================================
+# File is managed by copier template: gh:LabAutomationAndScreening/copier-base-template.git
+# See .config/.copier-managed-files.json for details.
+#
+# You are welcome to make changes to this file in your repo if they are custom to your project,
+# but if the change should be shared with other projects, please backport it to the template repo.
+# =====================================================================================================
 import argparse
 import os
 import platform
@@ -7,9 +14,9 @@ import sys
 import tempfile
 from pathlib import Path
 
-UV_VERSION = "0.11.17"
-PNPM_VERSION = "11.5.0"
-COPIER_VERSION = "==9.15.1"
+UV_VERSION = "0.11.25"
+PNPM_VERSION = "11.9.0"
+COPIER_VERSION = "==9.16.0"
 COPIER_TEMPLATE_EXTENSIONS_VERSION = "==0.3.3"
 PRE_COMMIT_VERSION = "4.5.1"
 GITHUB_WINDOWS_RUNNER_BIN_PATH = r"C:\Users\runneradmin\.local\bin"

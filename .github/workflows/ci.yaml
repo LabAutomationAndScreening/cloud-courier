@@ -1,3 +1,10 @@
+# ============== WARNING ==============================================================================
+# File is managed by copier template: gh:LabAutomationAndScreening/copier-base-template.git
+# See .config/.copier-managed-files.json for details.
+#
+# You are welcome to make changes to this file in your repo if they are custom to your project,
+# but if the change should be shared with other projects, please backport it to the template repo.
+# =====================================================================================================
 name: CI
 
 on:
@@ -108,7 +115,7 @@ jobs:
       - name: Upload coverage to Codecov
         # only upload coverage from fastest job
         if: ${{ matrix.JOB_MATCHING_DEV_ENV && github.actor != 'dependabot[bot]' }} # dependabot by default doesn't have access to the necessary secret...and dependabot should never be changing coverage anyway so it's fine not uploading it
-        uses: codecov/codecov-action@v5.1.1
+        uses: codecov/codecov-action@v7.0.0
         with:
           files: ./coverage.xml
           flags: unittests
@@ -117,6 +124,8 @@ jobs:
           fail_ci_if_error: true
           token: ${{ secrets.CODECOV_TOKEN }}
           slug: LabAutomationAndScreening/cloud-courier
+
+
 
   executable:
     needs:
