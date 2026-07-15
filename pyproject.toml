@@ -47,7 +47,7 @@ dev = [
     "pytest-randomly>=4.1.0",
     "mutmut>=3.6.0",
     "sphinx==9.0.4",
-    "pyinstaller>=6.20.0",
+    "pyinstaller>=6.21.0",
 ]
 
 [tool.setuptools]
