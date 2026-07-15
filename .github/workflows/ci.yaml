@@ -115,7 +115,7 @@ jobs:
       - name: Upload coverage to Codecov
         # only upload coverage from fastest job
         if: ${{ matrix.JOB_MATCHING_DEV_ENV && github.actor != 'dependabot[bot]' }} # dependabot by default doesn't have access to the necessary secret...and dependabot should never be changing coverage anyway so it's fine not uploading it
-        uses: codecov/codecov-action@v5.1.1
+        uses: codecov/codecov-action@v7.0.0
         with:
           files: ./coverage.xml
           flags: unittests
