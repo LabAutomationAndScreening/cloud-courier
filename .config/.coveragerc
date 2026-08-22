@@ -16,7 +16,7 @@ exclude_also =
     raise NotImplementedError
     raise AssertionError
 
-    # Don't complain about code specifically to help with pyright import resolution
+    # Don't complain about code specifically to help with pyrefly import resolution
     if TYPE_CHECKING:
 
     # Don't complain if non-runnable code isn't run:

@@ -74,9 +74,9 @@ jobs:
             exit 1
           fi
       - name: Checkout code
-        uses: actions/checkout@v6.0.2
+        uses: actions/checkout@v7.0.1
       - name: Setup python
-        uses: actions/setup-python@v6.2.0
+        uses: actions/setup-python@v7.0.0
         with:
           python-version: 3.13.9
       - name: Extract project version
@@ -99,35 +99,12 @@ jobs:
           fi
 
 
-  create-tag:
-    name: Create the git tag
-    if: ${{ !inputs.dry_run }}
-    timeout-minutes: 8
-    needs:
-      - guard
-    permissions:
-      contents: write # needed to push the tag
-    runs-on: ubuntu-24.04
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v6.0.2
-      - name: Setup python
-        uses: actions/setup-python@v6.2.0
-        with:
-          python-version: 3.13.9
-      - name: Confirm tag not already present
-        run: python3 ./.github/workflows/git_tag.py --version "${{ needs.guard.outputs.version }}" --confirm-tag-not-present
-      - name: Create tag
-        run: python3 ./.github/workflows/git_tag.py --version "${{ needs.guard.outputs.version }}" --push-tag-to-remote
-
-
   release:
     name: Create GitHub Release
     if: ${{ !inputs.dry_run }}
     runs-on: ubuntu-24.04
     timeout-minutes: 2
     needs:
-      - create-tag
       - guard
     permissions:
       contents: write # needed to create GitHub releases
@@ -159,6 +136,7 @@ jobs:
         uses: softprops/action-gh-release@v3.0.0
         with:
           tag_name: v${{ needs.guard.outputs.version }}
+          target_commitish: ${{ github.sha }}
           name: cloud-courier v${{ needs.guard.outputs.version }}
           generate_release_notes: true
           fail_on_unmatched_files: true

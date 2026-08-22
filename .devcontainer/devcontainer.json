@@ -28,16 +28,17 @@
         "-AmazonWebServices.aws-toolkit-vscode", // the AWS CLI feature installs this automatically, but it's causing problems in VS Code
         // basic tooling
         // "eamodio.gitlens@15.5.1",
-        "coderabbit.coderabbit-vscode@0.20.7",
+        "coderabbit.coderabbit-vscode@0.21.3",
         "ms-vscode.live-server@0.5.2025051301",
         "MS-vsliveshare.vsliveshare@1.0.5905",
-        "anthropic.claude-code@2.1.205",
+        "anthropic.claude-code@2.1.238",
 
         // Python
+        "-ms-python.vscode-pylance", // pyrefly is the language server for this project; ms-python.python auto-installs Pylance via its extension pack, and Pylance then warns on every boot that it's disabled
         "ms-python.python@2026.5.2026052901",
-        "meta.pyrefly@1.1.9001",
+        "meta.pyrefly@1.2.9002",
         "ms-vscode-remote.remote-containers@0.414.0",
-        "charliermarsh.ruff@2026.56.0",
+        "charliermarsh.ruff@2026.68.0",
 
         // Misc file formats
         "bierner.markdown-mermaid@1.29.0",
@@ -61,7 +62,7 @@
         // TODO: see if there's a way to specify different configurations for different folders
         "ruff.configuration": "/workspaces/cloud-courier/.config/ruff-non-src.toml", // use the non-src configuration since it's less restrictive and won't show false positives and underline things
         "python.pyrefly.configPath": "/workspaces/cloud-courier/.config/pyrefly.toml",
-        "prettier.configPath": ".config/.prettierrc",
+        "prettier.configPath": "/workspaces/cloud-courier/.config/.prettierrc",
         "[jsonc][json][javascript][typescript][graphql][css][scss][html][vue]": {
           "editor.defaultFormatter": "esbenp.prettier-vscode",
           "editor.formatOnSave": true
@@ -72,5 +73,5 @@
   "initializeCommand": "sh .devcontainer/initialize-command.sh",
   "onCreateCommand": "sh .devcontainer/on-create-command.sh",
   "postStartCommand": "sh .devcontainer/post-start-command.sh"
-  // Devcontainer context hash (do not manually edit this, it's managed by a pre-commit hook): 5f869ca6 # spellchecker:disable-line
+  // Devcontainer context hash (do not manually edit this, it's managed by a pre-commit hook): 2175c0cb # spellchecker:disable-line
 }

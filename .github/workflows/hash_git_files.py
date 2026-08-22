@@ -96,24 +96,15 @@ def compute_adler32(repo_path: Path, files: list[str], extra_paths: list[Path] |
             if file_path.name == "uv.lock":
                 checksum = zlib.adler32(get_uv_lock_bytes_for_hashing(file_path), checksum)
             else:
-                with file_path.open("rb") as f:
-                    while True:
-                        chunk = f.read(4096)
-                        if not chunk:
-                            break
-                        checksum = zlib.adler32(chunk, checksum)
+                # Normalize CRLF to LF so the checksum is identical on Windows (autocrlf) and Linux CI checkouts.
+                checksum = zlib.adler32(file_path.read_bytes().replace(b"\r\n", b"\n"), checksum)
         except IsADirectoryError:
             # Ignore symlinks that on windows sometimes get confused as being directories
             continue
 
     for extra_path in sorted(extra_paths or []):
         checksum = zlib.adler32(str(extra_path).encode("utf-8"), checksum)
-        with extra_path.open("rb") as f:
-            while True:
-                chunk = f.read(4096)
-                if not chunk:
-                    break
-                checksum = zlib.adler32(chunk, checksum)
+        checksum = zlib.adler32(extra_path.read_bytes().replace(b"\r\n", b"\n"), checksum)
 
     return checksum
 

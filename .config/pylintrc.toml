@@ -9,7 +9,7 @@
 disable = "all"
 enable = [
   # These are always needed to ensure that a crash within pylint itself appropriately causes a failure
-  "astroid-error",
+  "astroid-error", # spellchecker:disable-line
   "fatal",
   # Rules relating to errors found parsing this config file
   "config-parse-error",

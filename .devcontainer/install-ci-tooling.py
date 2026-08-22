@@ -14,11 +14,11 @@ import sys
 import tempfile
 from pathlib import Path
 
-UV_VERSION = "0.11.25"
-PNPM_VERSION = "11.9.0"
-COPIER_VERSION = "==9.16.0"
+UV_VERSION = "0.12.5"
+PNPM_VERSION = "11.22.0"
+COPIER_VERSION = "==9.17.1"
 COPIER_TEMPLATE_EXTENSIONS_VERSION = "==0.3.3"
-PRE_COMMIT_VERSION = "4.5.1"
+PRE_COMMIT_VERSION = "4.6.2"
 GITHUB_WINDOWS_RUNNER_BIN_PATH = r"C:\Users\runneradmin\.local\bin"
 INSTALL_SSM_PLUGIN_BY_DEFAULT = False
 parser = argparse.ArgumentParser(description="Install CI tooling for the repo")
@@ -61,7 +61,7 @@ def main():
             # invoke installer in a pwsh process
             _ = subprocess.run(  # noqa: S603 # this is all our own input
                 [
-                    pwsh,  # type: ignore[reportPossiblyUnboundVariable] # this matches the conditional above that defines pwsh
+                    pwsh,
                     "-NoProfile",
                     "-NonInteractive",
                     "-Command",

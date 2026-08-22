@@ -33,6 +33,7 @@
         ".claude/package.json",
         ".claude/settings/basics.jsonc",
         ".claude/settings/hooks.jsonc",
+        ".claude/settings/models.jsonc",
         ".claude/settings/permissions/additional-dirs.jsonc",
         ".claude/settings/permissions/bash.jsonc",
         ".claude/settings/permissions/read.jsonc",
@@ -101,10 +102,11 @@
         "README.md",
         "biome.jsonc",
         "pyproject.toml",
-        "pyrightconfig.json",
         "pytest.ini",
         "scripts/delete_false_positive_rej.py",
-        "sh.bat"
+        "sh.bat",
+        "tests/__init__.py",
+        "tests/conftest.py"
       ]
     },
     {
@@ -123,6 +125,7 @@
         "docs/index.rst",
         "docs/make.bat",
         "docs/requirements.txt",
+        "pyrightconfig.json",
         "src/entrypoint.py",
         "tests/unit/__init__.py",
         "tests/unit/conftest.py"
