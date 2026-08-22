@@ -33,6 +33,7 @@ ignore-errors-in-generated-code = true # not sure yet how effective this is
 no-access = "ignore" # (already covered by ruff SLF001)
 untyped-import = "ignore" # equivalent of reportMissingTypeStubs=false in pyright
 unannotated-return = "ignore" # ruff ANN2xx already requires this, but with suppress-none-returning so that None-returning functions don't need the noise. pyrefly has no equivalent option---the error kind is all-or-nothing.
+implicit-reexport = "ignore" # TODO: convert cloud-courier into the nuxt-app template anyway, which has this by default....cloud courier is not a "library"
 
 [[sub-config]]
 matches = "../**/tests/**"

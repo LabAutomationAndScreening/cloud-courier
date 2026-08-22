@@ -25,23 +25,23 @@ def _get_ssm_param_value(ssm_client: SSMClient, name: str) -> str:
 
 def _get_ssm_param_values(ssm_client: SSMClient, prefix: str) -> dict[str, str]:
     parameters: list[ParameterMetadataTypeDef] = []
-    next_token = None
+    next_token = ""
 
     while True:
         # API call with optional pagination
         response = ssm_client.describe_parameters(
             ParameterFilters=[{"Key": "Name", "Option": "BeginsWith", "Values": [prefix]}],
             MaxResults=50,  # AWS allows up to 50 results per call
-            NextToken=next_token or "",
+            NextToken=next_token,
         )
 
         # Add parameters from this page
         parameters.extend(response.get("Parameters", []))
 
         # Check if more pages exist
-        next_token = response.get("NextToken")
-        if not next_token:
+        if "NextToken" not in response:
             break
+        next_token = response["NextToken"]
 
     params_dict: dict[str, str] = {}
     for param in parameters:

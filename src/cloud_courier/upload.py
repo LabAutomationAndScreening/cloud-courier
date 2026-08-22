@@ -49,7 +49,10 @@ def calculate_aws_checksum(file_path: Path, part_size_bytes: int = MIN_MULTIPART
 
     # Read the file in chunks and calculate MD5 for each part
     with file_path.open("rb") as f:
-        while chunk := f.read(part_size_bytes):
+        while True:
+            chunk = f.read(part_size_bytes)
+            if len(chunk) == 0:
+                break
             md5_hash = hashlib.md5(chunk)  # noqa: S324 # we don't need this to be secure, this is just a checksum for file integrity
             md5_list.append(md5_hash.digest())
 
@@ -93,7 +96,7 @@ def upload_to_s3(
                 part_number = 1
                 while True:
                     data = f.read(part_size_bytes)
-                    if not data:
+                    if len(data) == 0:
                         break  # End of file reached
                     logger.info(f"Uploading part {part_number}...")
 
