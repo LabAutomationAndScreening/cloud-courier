@@ -24,4 +24,3 @@ ssh_port_number: 61335
 use_codecov: true
 use_windows_in_ci: false
 use_windows_in_exe_ci: true
-

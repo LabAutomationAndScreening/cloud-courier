@@ -7,7 +7,7 @@
 # =====================================================================================================
 [project]
 name = "cloud-courier"
-version = "0.0.4"
+version = "0.0.5"
 description = "Agent to upload files to cloud"
 authors = [
     {name = "Eli Fine"},
