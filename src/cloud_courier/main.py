@@ -200,7 +200,7 @@ class MainLoop:
         self.file_system_events = SimpleQueue()
         if self.create_duplicate_event_stream_for_test_monitoring:
             self.file_system_events_for_test_monitoring = SimpleQueue()
-        self.observers.clear()  # type: ignore[reportUnknownMemberType] # pyright doesn't seem to like Observer
+        self.observers.clear()
 
         self.config = load_config_from_aws(self.boto_session)
         # TODO: check all the folders and raise an error if any don't exist
@@ -266,10 +266,10 @@ class MainLoop:
 
     def run(self) -> int:
         self._boot_up()
-        self.observers.append(Observer())  # type: ignore[reportUnknownMemberType] # pyright doesn't seem to like Observer
+        self.observers.append(Observer())
         folder_config = next(iter(self.config.folders_to_watch.values()))
         folder_path = folder_config.folder_path
-        self.observers[0].schedule(  # type: ignore[reportUnknownMemberType] # pyright doesn't seem to like Observer
+        self.observers[0].schedule(
             EventHandler(
                 file_system_events=self.file_system_events,
                 folder_config=folder_config,
@@ -280,7 +280,7 @@ class MainLoop:
             folder_path,
             recursive=folder_config.recursive,
         )
-        self.observers[0].start()  # type: ignore[reportUnknownMemberType] # pyright doesn't seem to like Observer
+        self.observers[0].start()
         self.main_loop_entered.set()
         while True:
             self._send_heartbeat_if_needed()
@@ -299,8 +299,8 @@ class MainLoop:
             self.num_loop_iterations += 1
             if self.num_loop_iterations > RESET_POINT_FOR_LOOP_ITERATION_COUNTER:
                 self.num_loop_iterations = 0
-        self.observers[0].stop()  # type: ignore[reportUnknownMemberType] # pyright doesn't seem to like Observer
-        self.observers[0].join()  # type: ignore[reportUnknownMemberType] # pyright doesn't seem to like Observer
+        self.observers[0].stop()
+        self.observers[0].join()
         return 0
 
     def _idle_loop_sleep(self):

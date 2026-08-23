@@ -1,5 +1,3 @@
-from typing import Any
-
 import pytest
 
 from cloud_courier import calculate_aws_checksum
@@ -15,9 +13,9 @@ class TestCalculateAwsChecksum:
             pytest.param("50_bytes.txt", 11, "079f011e02bb35156be572e82c69fed8-5", id="multiple parts"),
         ],
     )
-    def test_calculate_aws_checksum(self, file_name: str, part_size_bytes: None | int, expected: str):
+    def test_calculate_aws_checksum(self, file_name: str, part_size_bytes: int | None, expected: str):
         file_path = PATH_TO_EXAMPLE_DATA_FILES / file_name
-        kwargs: dict[str, Any] = {}
+        kwargs: dict[str, int] = {}
         if part_size_bytes is not None:
             kwargs["part_size_bytes"] = part_size_bytes
 
