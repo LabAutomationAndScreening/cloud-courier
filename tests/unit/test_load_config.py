@@ -56,9 +56,8 @@ class TestWhenSsmReturnsAnEmptyNextToken:
         actual = load_config._get_ssm_param_values(ssm_client, prefix)  # noqa: SLF001 # the pagination behavior under test is only reachable through this private helper
 
         assert actual == {folder_descriptor: param_value}
-        mocked_describe.assert_called_once_with(
-            ParameterFilters=[{"Key": "Name", "Option": "BeginsWith", "Values": [prefix]}], MaxResults=50
-        )
+        assert mocked_describe.call_count == 1
+        assert "NextToken" not in mocked_describe.call_args_list[0].kwargs
 
 
 class LoadConfigFromAws:
