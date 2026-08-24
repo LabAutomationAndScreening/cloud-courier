@@ -22,10 +22,10 @@ classifiers = [
 
 ]
 dependencies = [
-    "boto3>=1.40.6",
+    "boto3>=1.43.78",
     "structlog>=25.4.0",
     "watchdog>=6.0.0",
-    "pydantic>=2.12.5",
+    "pydantic>=2.13.4",
     "boto3-stubs[ssm]"
 ]
 
@@ -33,21 +33,21 @@ dependencies = [
 [dependency-groups]
 dev = [
     # Specific to this repository
-    "boto3-stubs[all]>=1.40.30",
+    "boto3-stubs[all]>=1.43.78",
     "pytest-mock>=3.15.1",
-    "time-machine>=3.2.0",
+    "time-machine>=3.4.0",
     "pytest-timeout>=2.4.0",
     "sphinx-togglebutton==0.3.2",
 
     # Managed by upstream template
     "pyright>=1.1.411",
-    "pyrefly>=1.1.1",
+    "pyrefly>=1.2.0",
     "pytest>=9.1.1",
     "pytest-cov>=7.1.0",
     "pytest-randomly>=4.1.0",
-    "mutmut>=3.6.0",
+    "mutmut>=3.7.0",
     "sphinx==9.0.4",
-    "pyinstaller>=6.20.0",
+    "pyinstaller>=6.22.2",
 ]
 
 [tool.setuptools]

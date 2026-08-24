@@ -22,22 +22,27 @@ project-includes = [
                     "../tests"
                   ]
 search-path = [".."]
-disable-project-excludes-heuristics = true # with this being enabled by default, pyrefly things the src is excluded because it's an editable local install
+disable-project-excludes-heuristics = true # with this being enabled by default, pyrefly thinks the src is excluded because it's an editable local install
 python-platform = "linux"
 infer-with-first-use = false # more similar to pyright. must define the empty list type when instantiated
-# "strict" enables the maximalist error set plus strict-callable-subtyping and
-# unused-ignore. "preset = all" (every error kind) will be available in v1.1.
-preset = "strict"
+preset = "all"
 spec-compliant-overloads = true # not sure exactly what this does, but seems like a good idea to be more spec compliant
 ignore-errors-in-generated-code = true # not sure yet how effective this is
 
 [errors]
 no-access = "ignore" # (already covered by ruff SLF001)
-# reportMissingTypeStubs=false in pyright
-untyped-import = "ignore"
+untyped-import = "ignore" # equivalent of reportMissingTypeStubs=false in pyright
+unannotated-return = "ignore" # ruff ANN2xx already requires this, but with suppress-none-returning so that None-returning functions don't need the noise. pyrefly has no equivalent option---the error kind is all-or-nothing.
+implicit-reexport = "ignore" # TODO: convert cloud-courier into the nuxt-app template anyway, which has this by default....cloud courier is not a "library"
 
 [[sub-config]]
-matches = "**/tests/**"
+matches = "../**/tests/**"
 
 [sub-config.errors]
 implicitly-defined-attribute = "ignore" # doesn't make any sense for test cases. See https://github.com/microsoft/pyright/discussions/4834#discussioncomment-8496931
+# Tests are self-asserting: a value that isn't what the test assumed fails the very next assertion,
+# pointing at the exact line. The unknowns these rules flag also come almost entirely from mocking, where the value
+# genuinely is `Any` and no upstream typing fix is possible --- `spy_return` is set dynamically on the mock,
+# and `call_args[0]` is untyped by construction --- so enforcing here only buys narrowing ceremony at every spy.
+unknown-variable-type = "ignore"
+unknown-argument-type = "ignore"

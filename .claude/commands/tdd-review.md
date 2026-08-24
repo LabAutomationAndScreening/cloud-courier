@@ -59,7 +59,7 @@ For each test file, check against these criteria:
 |--------------|-------------------|
 | **The Liar** | `expect(true).toBe(true)`, empty test bodies, tests with no assertions |
 | **Excessive Setup** | >20 lines of arrange code, >5 mocks, deep nested object construction |
-| **The One** | >5 assertions testing unrelated behaviors in a single test |
+| **The One** | Multiple Acts in a unit test, Acts from unrelated scenarios strung together under one name, or assertions that don't trace back to one of the test's Acts - assertion count alone is not the signal, since a single Act can warrant many assertions, and E2E or other multi-step flows legitimately chain several sequential Acts within one scenario |
 | **The Peeping Tom** | Testing private methods, asserting on internal state, tests that break on any refactor |
 | **The Slow Poke** | Real database/network calls, file I/O, hard-coded timeouts |
 

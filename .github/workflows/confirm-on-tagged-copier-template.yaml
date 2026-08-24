@@ -24,7 +24,7 @@ jobs:
         ANSWERS_FILE_PATTERN: ${{ inputs.answers_file_pattern }}
     steps:
       - name: Checkout code
-        uses: actions/checkout@v6.0.2
+        uses: actions/checkout@v7.0.1
         with:
           persist-credentials: false
 

@@ -1,5 +1,5 @@
 # Changes here will be overwritten by Copier
-_commit: v0.0.71
+_commit: v0.0.75
 _src_path: gh:LabAutomationAndScreening/copier-python-package-template
 configure_python_asyncio: false
 configure_vcrpy: false
@@ -24,4 +24,3 @@ ssh_port_number: 61335
 use_codecov: true
 use_windows_in_ci: false
 use_windows_in_exe_ci: true
-
