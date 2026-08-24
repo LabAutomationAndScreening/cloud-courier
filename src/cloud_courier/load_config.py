@@ -13,6 +13,7 @@ from .courier_config_models import AppConfig
 from .courier_config_models import FolderToWatch
 
 if TYPE_CHECKING:
+    from mypy_boto3_ssm.type_defs import DescribeParametersRequestTypeDef
     from mypy_boto3_ssm.type_defs import ParameterMetadataTypeDef
 logger = logging.getLogger(__name__)
 
@@ -28,12 +29,14 @@ def _get_ssm_param_values(ssm_client: SSMClient, prefix: str) -> dict[str, str]:
     next_token = ""
 
     while True:
-        # API call with optional pagination
-        response = ssm_client.describe_parameters(
-            ParameterFilters=[{"Key": "Name", "Option": "BeginsWith", "Values": [prefix]}],
-            MaxResults=50,  # AWS allows up to 50 results per call
-            NextToken=next_token,
-        )
+        request: DescribeParametersRequestTypeDef = {
+            "ParameterFilters": [{"Key": "Name", "Option": "BeginsWith", "Values": [prefix]}],
+            "MaxResults": 50,  # AWS allows up to 50 results per call
+        }
+        # AWS treats NextToken as an opaque value handed back by a prior response, so omit it entirely on the first call
+        if len(next_token) > 0:
+            request["NextToken"] = next_token
+        response = ssm_client.describe_parameters(**request)
 
         # Add parameters from this page
         parameters.extend(response.get("Parameters", []))
@@ -42,6 +45,9 @@ def _get_ssm_param_values(ssm_client: SSMClient, prefix: str) -> dict[str, str]:
         if "NextToken" not in response:
             break
         next_token = response["NextToken"]
+        # An empty token also means there are no further pages, and re-sending it would loop forever
+        if len(next_token) == 0:
+            break
 
     params_dict: dict[str, str] = {}
     for param in parameters:

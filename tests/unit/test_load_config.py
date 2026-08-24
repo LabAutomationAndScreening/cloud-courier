@@ -36,6 +36,31 @@ def test_extract_role_name_from_arn(arn: str, expected: str):
     assert actual == expected
 
 
+class TestWhenSsmReturnsAnEmptyNextToken:
+    def test_Given_single_page_response__When_ssm_params_fetched__Then_only_one_request_made_and_it_omits_next_token(
+        self, mocker: MockerFixture
+    ):
+        prefix = f"/{uuid.uuid4()}"
+        folder_descriptor = str(uuid.uuid4())
+        param_value = str(uuid.uuid4())
+        ssm_client = boto3.Session(region_name=GENERIC_COURIER_CONFIG.aws_region).client("ssm")
+        mocked_describe = mocker.patch.object(
+            ssm_client,
+            ssm_client.describe_parameters.__name__,
+            side_effect=[{"Parameters": [{"Name": f"{prefix}/{folder_descriptor}"}], "NextToken": ""}],
+        )
+        _ = mocker.patch.object(
+            ssm_client, ssm_client.get_parameter.__name__, return_value={"Parameter": {"Value": param_value}}
+        )
+
+        actual = load_config._get_ssm_param_values(ssm_client, prefix)  # noqa: SLF001 # the pagination behavior under test is only reachable through this private helper
+
+        assert actual == {folder_descriptor: param_value}
+        mocked_describe.assert_called_once_with(
+            ParameterFilters=[{"Key": "Name", "Option": "BeginsWith", "Values": [prefix]}], MaxResults=50
+        )
+
+
 class LoadConfigFromAws:
     _config = GENERIC_COURIER_CONFIG
 
