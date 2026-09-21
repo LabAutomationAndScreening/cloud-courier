@@ -46,6 +46,17 @@ services:
       - DOLT_DATABASE=beads_work
       - DOLT_DISABLE_EVENT_FLUSH=1 # dolt contacts doltremoteapi.dolthub.com with usage metrics by default, even with no remotes configured (see beads SECURITY.md)
 
+  # Specific to this repository: nearly every backend unit test talks to AWS, so localstack has to be
+  # available in the devcontainer. Deliberately not backported -- the upstream template has no AWS dependency.
+  localstack:
+    image: localstack/localstack:4.14.0 # no known reason for not using newer versions, just pinning for best practice
+    container_name: localstack
+    ports:
+      - "4566:4566"  # Main edge port for all AWS service emulation
+    environment:
+      # really cryptic error messages unless DEBUG is set
+      - DEBUG=1
+      - SERVICES=s3,sts,cloudwatch,ssm,events,iam
 
 volumes:
   beads_dolt_data: {}

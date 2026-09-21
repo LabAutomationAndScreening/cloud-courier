@@ -9,15 +9,14 @@ from unittest.mock import ANY
 
 import boto3
 import pytest
+from backend_api import INSTALLED_AGENT_VERSION_TAG_KEY
+from backend_api import entrypoint
+from backend_api import get_role_arn
+from backend_api import get_version
+from backend_api import main
 from botocore.session import Session
 from botocore.stub import Stubber
 from pytest_mock import MockerFixture
-
-from cloud_courier import INSTALLED_AGENT_VERSION_TAG_KEY
-from cloud_courier import entrypoint
-from cloud_courier import get_role_arn
-from cloud_courier import get_version
-from cloud_courier import main
 
 from .fixtures import mock_path_to_aws_credentials
 from .fixtures import mocked_generic_config

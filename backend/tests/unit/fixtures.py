@@ -7,17 +7,16 @@ from threading import Thread
 
 import boto3
 import pytest
+from backend_api import CourierConfig
+from backend_api import MainLoop
+from backend_api import aws_credentials
+from backend_api import get_role_arn
+from backend_api import load_config_from_aws
+from backend_api import main
+from backend_api import upload_to_s3
+from backend_api.courier_config_models import SSM_PARAMETER_PREFIX
+from backend_api.courier_config_models import SSM_PARAMETER_PREFIX_TO_ALIASES
 from pytest_mock import MockerFixture
-
-from cloud_courier import CourierConfig
-from cloud_courier import MainLoop
-from cloud_courier import aws_credentials
-from cloud_courier import get_role_arn
-from cloud_courier import load_config_from_aws
-from cloud_courier import main
-from cloud_courier import upload_to_s3
-from cloud_courier.courier_config_models import SSM_PARAMETER_PREFIX
-from cloud_courier.courier_config_models import SSM_PARAMETER_PREFIX_TO_ALIASES
 
 from .constants import GENERIC_COURIER_CONFIG
 from .constants import PATH_TO_EXAMPLE_WINDOWS_AWS_CREDS

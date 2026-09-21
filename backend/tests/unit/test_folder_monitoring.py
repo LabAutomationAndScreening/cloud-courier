@@ -9,13 +9,12 @@ from unittest.mock import ANY
 
 import pytest
 import time_machine
-
-from cloud_courier import add_to_upload_record
-from cloud_courier import calculate_aws_checksum
-from cloud_courier import create_record_file
-from cloud_courier import main
-from cloud_courier import parse_upload_record
-from cloud_courier import upload_to_s3
+from backend_api import add_to_upload_record
+from backend_api import calculate_aws_checksum
+from backend_api import create_record_file
+from backend_api import main
+from backend_api import parse_upload_record
+from backend_api import upload_to_s3
 
 from .fixtures import MainLoopMixin
 from .fixtures import mocked_generic_config

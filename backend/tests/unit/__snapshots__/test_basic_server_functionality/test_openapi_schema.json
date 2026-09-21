@@ -3,7 +3,7 @@
   "info": {
     "title": "Cloud Courier",
     "description": "Agent to upload files to cloud",
-    "version": "0.1.0"
+    "version": "0.0.5"
   },
   "paths": {
     "/api/healthcheck": {

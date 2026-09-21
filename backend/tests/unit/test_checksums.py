@@ -1,6 +1,5 @@
 import pytest
-
-from cloud_courier import calculate_aws_checksum
+from backend_api import calculate_aws_checksum
 
 from .constants import PATH_TO_EXAMPLE_DATA_FILES
 

@@ -2,12 +2,11 @@ import uuid
 
 import boto3
 import pytest
+from backend_api import extract_role_name_from_arn
+from backend_api import load_config
+from backend_api import load_config_from_aws
 from pydantic import ValidationError
 from pytest_mock import MockerFixture
-
-from cloud_courier import extract_role_name_from_arn
-from cloud_courier import load_config
-from cloud_courier import load_config_from_aws
 
 from .constants import COMPLEX_COURIER_CONFIG
 from .constants import GENERIC_COURIER_CONFIG

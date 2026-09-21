@@ -2,9 +2,8 @@ import sys
 
 import pytest
 import time_machine
-
-from cloud_courier import aws_credentials
-from cloud_courier import path_to_aws_credentials
+from backend_api import aws_credentials
+from backend_api import path_to_aws_credentials
 
 from .fixtures import mock_path_to_aws_credentials
 

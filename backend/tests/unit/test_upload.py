@@ -4,16 +4,15 @@ from pathlib import Path
 
 import boto3
 import pytest
+from backend_api import MIN_MULTIPART_BYTES
+from backend_api import ChecksumMismatchError
+from backend_api import FolderToWatch
+from backend_api import convert_path_to_s3_object_key
+from backend_api import convert_path_to_s3_object_tag
+from backend_api import dummy_function_during_multipart_upload
+from backend_api import upload
+from backend_api import upload_to_s3
 from pytest_mock import MockerFixture
-
-from cloud_courier import MIN_MULTIPART_BYTES
-from cloud_courier import ChecksumMismatchError
-from cloud_courier import FolderToWatch
-from cloud_courier import convert_path_to_s3_object_key
-from cloud_courier import convert_path_to_s3_object_tag
-from cloud_courier import dummy_function_during_multipart_upload
-from cloud_courier import upload
-from cloud_courier import upload_to_s3
 
 from .constants import PATH_TO_EXAMPLE_DATA_FILES
 

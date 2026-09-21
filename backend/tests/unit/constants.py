@@ -1,8 +1,8 @@
 from pathlib import Path
 
-from cloud_courier import AppConfig
-from cloud_courier import CourierConfig
-from cloud_courier import FolderToWatch
+from backend_api import AppConfig
+from backend_api import CourierConfig
+from backend_api import FolderToWatch
 
 PATH_TO_EXAMPLE_DATA_FILES = Path(__file__).parent.resolve() / "example_data_files"
 PATH_TO_EXAMPLE_WINDOWS_AWS_CREDS = Path(__file__).parent.resolve() / "example_windows_aws_creds.ini"

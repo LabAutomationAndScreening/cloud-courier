@@ -26,13 +26,13 @@ from watchdog.observers import Observer
 
 from .aws_credentials import create_boto_session
 from .aws_credentials import get_role_arn
-from .cli import get_version
-from .cli import parser
 from .constants import Checksum
 from .courier_config_models import CLOUDWATCH_HEARTBEAT_NAMESPACE
 from .courier_config_models import CLOUDWATCH_INSTANCE_ID_DIMENSION_NAME
 from .courier_config_models import HEARTBEAT_METRIC_NAME
 from .courier_config_models import FolderToWatch
+from .entrypoint.parser import get_version
+from .entrypoint.parser import parser
 from .load_config import CourierConfig
 from .load_config import extract_role_name_from_arn
 from .load_config import load_config_from_aws
@@ -337,7 +337,9 @@ def _update_instance_tag(*, boto_session: boto3.Session, role_arn: str):
         ResourceType="ManagedInstance",
         ResourceId=instance_id,
         Tags=[
-            {"Key": INSTALLED_AGENT_VERSION_TAG_KEY, "Value": get_version()},
+            # prepend_v preserves the exact tag value written before the package was renamed; the
+            # cloud-courier-infrastructure Pulumi code reads this tag, so the format must not drift.
+            {"Key": INSTALLED_AGENT_VERSION_TAG_KEY, "Value": get_version(prepend_v=True)},
         ],
     )
 

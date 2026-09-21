@@ -4,10 +4,9 @@ import time
 import boto3
 import pytest
 import time_machine
-
-from cloud_courier import CLOUDWATCH_HEARTBEAT_NAMESPACE
-from cloud_courier import CLOUDWATCH_INSTANCE_ID_DIMENSION_NAME
-from cloud_courier import HEARTBEAT_METRIC_NAME
+from backend_api import CLOUDWATCH_HEARTBEAT_NAMESPACE
+from backend_api import CLOUDWATCH_INSTANCE_ID_DIMENSION_NAME
+from backend_api import HEARTBEAT_METRIC_NAME
 
 from .fixtures import MainLoopMixin
 from .fixtures import mocked_generic_config

@@ -51,7 +51,7 @@ class TestCliArgParsing:
         expected_log_level = random_non_info_log_level()
         self._spy_on_configure_logging()
 
-        self._run_entrypoint([f"--log-level={expected_log_level}"])
+        self._run_entrypoint([*GENERIC_REQUIRED_CLI_ARGS, f"--log-level={expected_log_level}"])
 
         self.spied_configure_logging.assert_called_once_with(log_level=expected_log_level, log_filename_prefix=ANY)
 
@@ -60,7 +60,7 @@ class TestCliArgParsing:
         with tempfile.TemporaryDirectory() as temp_dir:
             expected_log_folder = temp_dir
 
-            self._run_entrypoint([f"--log-folder={expected_log_folder}"])
+            self._run_entrypoint([*GENERIC_REQUIRED_CLI_ARGS, f"--log-folder={expected_log_folder}"])
 
         self.spied_configure_logging.assert_called_once_with(
             log_filename_prefix=str(Path(expected_log_folder) / f"{APP_NAME}-"),
@@ -70,21 +70,21 @@ class TestCliArgParsing:
     def test_Given_log_level_specified__Then_log_level_passed_to_uvicorn(self):
         expected_log_level = random_non_info_log_level()
 
-        self._run_entrypoint([f"--log-level={expected_log_level}"])
+        self._run_entrypoint([*GENERIC_REQUIRED_CLI_ARGS, f"--log-level={expected_log_level}"])
 
         assert self._built_config().log_level == expected_log_level.lower()
 
     def test_Given_port_specified__Then_port_passed_to_uvicorn(self):
         expected_port = random.randint(1000, 9999)
 
-        self._run_entrypoint([f"--port={expected_port}"])
+        self._run_entrypoint([*GENERIC_REQUIRED_CLI_ARGS, f"--port={expected_port}"])
 
         assert self._built_config().port == expected_port
 
     def test_Given_host_specified__Then_host_passed_to_uvicorn(self):
         expected_host = str(uuid4())
 
-        self._run_entrypoint([f"--host={expected_host}"])
+        self._run_entrypoint([*GENERIC_REQUIRED_CLI_ARGS, f"--host={expected_host}"])
 
         assert self._built_config().host == expected_host
 

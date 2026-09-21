@@ -7,7 +7,7 @@
 # =====================================================================================================
 [project]
 name = "backend-api"
-version = "0.1.0"
+version = "0.0.5" # continues the version line from the pre-migration root pyproject.toml; the release workflow tags from this value
 description = "Agent to upload files to cloud"
 
 readme = "README.md"
@@ -15,6 +15,9 @@ requires-python = ">=3.13.9"
 
 dependencies = [
     # Specific to this repository
+    "boto3>=1.43.78",
+    "watchdog>=6.0.0",
+    "boto3-stubs[ssm]",
 
     # Managed by upstream template
     "fastapi>=0.141.1",
@@ -32,7 +35,8 @@ dependencies = [
 [dependency-groups]
 dev = [
     # Specific to this repository
-
+    "boto3-stubs[all]>=1.43.78",
+    "time-machine>=3.5.1",
 
     # Managed by upstream template
     "httpx>=0.28.1",
