@@ -20,6 +20,7 @@ ignore = [
     "S311", # pseudo-randomness is fine for test cases
     "TID252", # sometimes you can't use absolute imports in test cases for importing things within the tests, because they're not a true package or have conflicting namespaces
     "TRY003", # tests don't need to create custom exception classes, generally you want to throw an AssertionError with a message anyway
+    "TC001", "TC002", "TC003" # we don't need to worry about TYPE_CHECKING guards in tests---needless complication for marginal benefit
 ]
 
 unfixable = [
@@ -31,3 +32,7 @@ unfixable = [
 
 [lint.flake8-pytest-style]
 raises-require-match-for = ["*"] # ensures we always have a match for our raises statements so that we validate tests fail for the right reason
+
+[lint.flake8-tidy-imports.banned-api]
+"typing.TYPE_CHECKING".msg = "This is in non-source code. There is no reason to be doing TYPE_CHECKING blocks in tests or script. If you do have a need add `# noqa: TID251` with a clarifying comment"
+"__future__.annotations".msg = "__future__.annotations will be deprecated, once 3.13 is EOL. Also see https://peps.python.org/pep-0749/. If this is problematic, turn annotations into strings, or add `# noqa: TID251` with a clarifying comment but likely this import is not necessary at all."

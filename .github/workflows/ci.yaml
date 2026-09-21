@@ -115,7 +115,7 @@ jobs:
       - name: Upload coverage to Codecov
         # only upload coverage from fastest job
         if: ${{ matrix.JOB_MATCHING_DEV_ENV && github.actor != 'dependabot[bot]' }} # dependabot by default doesn't have access to the necessary secret...and dependabot should never be changing coverage anyway so it's fine not uploading it
-        uses: codecov/codecov-action@v7.0.0
+        uses: codecov/codecov-action@v7.1.0
         with:
           files: ./coverage.xml
           flags: unittests
@@ -216,17 +216,16 @@ jobs:
     if: always()
     steps:
       - name: fail if prior job failure
+        # Iterating the needs context keeps this gate from drifting out of sync with the job list above
+        env:
+          NEEDS: ${{ toJSON(needs) }}
         run: |
-          success_pattern="^(skipped|success)$" # these are the possibilities: https://docs.github.com/en/actions/reference/workflows-and-actions/contexts#needs-context
+          # these are the possibilities: https://docs.github.com/en/actions/reference/workflows-and-actions/contexts#needs-context
+          not_ok=$(jq -r 'to_entries[] | select(.value.result | test("^(skipped|success)$") | not) | .key' <<<"$NEEDS")
 
-          if [[ ! "${{ needs.get-values.result }}" =~ $success_pattern ]] ||
-            [[ ! "${{ needs.check-skip-duplicate.result }}" =~ $success_pattern ]] ||
-            [[ ! "${{ needs.lint.result }}" =~ $success_pattern ]] ||
-            [[ ! "${{ needs.build-docs.result }}" =~ $success_pattern ]] ||
-            [[ ! "${{ needs.executable.result }}" =~ $success_pattern ]] ||
-            [[ ! "${{ needs.test.result }}" =~ $success_pattern ]] ||
-            [[ ! "${{ needs.confirm-on-tagged-copier-template.result }}" =~ $success_pattern ]]; then
-            echo "❌ One or more jobs did not finish with skipped or success"
+          if [[ -n "$not_ok" ]]; then
+            echo "❌ One or more jobs did not finish with skipped or success:"
+            echo "$not_ok"
             exit 1
           fi
           echo "✅ All jobs finished with skipped or success"
