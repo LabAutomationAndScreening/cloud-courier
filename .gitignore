@@ -123,4 +123,8 @@ dist
 # macOS dev cleanliness
 **/.DS_Store
 
+# Devcontainer
+# The devcontainer CLI writes this lock file to pin feature digests, but we are not using it yet
+.devcontainer/devcontainer-lock.json
+
 # Ignores specific to this repository

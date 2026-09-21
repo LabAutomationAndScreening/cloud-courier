@@ -27,6 +27,15 @@ DOWNLOAD_TIMEOUT_SECONDS = 90
 # not on Windows, which is why uv is invoked through an absolute path there.
 LOCAL_BIN_DIR = Path.home() / ".local" / "bin"
 INSTALL_SSM_PLUGIN_BY_DEFAULT = False
+# A floor rather than an exact pin: GitHub's runner images ship their own build of the plugin and only
+# ever move it forward, so demanding an exact version means asking a Windows runner to downgrade, which
+# its installer refuses outright with MSI error 1638.
+SSM_PLUGIN_MINIMUM_VERSION = (1, 2, 835, 0)
+SSM_PLUGIN_DOWNLOAD_VERSION = ".".join(str(part) for part in SSM_PLUGIN_MINIMUM_VERSION)
+SSM_PLUGIN_EXECUTABLE = "session-manager-plugin"
+# Where the Windows installer places the executable. Needed because a fresh install does not reach the
+# PATH of the already-running process, so PATH alone cannot confirm the install landed.
+SSM_PLUGIN_WINDOWS_PATH = Path(r"C:\Program Files\Amazon\SessionManagerPlugin\bin\session-manager-plugin.exe")
 parser = argparse.ArgumentParser(description="Install CI tooling for the repo")
 _ = parser.add_argument(
     "--no-python",
@@ -123,6 +132,113 @@ def run_node_cmds(cmds: list[str], *, is_windows: bool) -> None:
         _ = subprocess.run(run_cmd, shell=True, check=True, timeout=DOWNLOAD_TIMEOUT_SECONDS)  # noqa: S602 # we need shell=True for npm commands, and this is all our own input
 
 
+def parse_version(raw: str) -> tuple[int, ...] | None:
+    stripped = raw.strip()
+    if not stripped:
+        return None
+    parts: list[int] = []
+    for segment in stripped.split("."):
+        if not segment.isdigit():
+            return None
+        parts.append(int(segment))
+    return tuple(parts)
+
+
+def resolve_ssm_plugin() -> str | None:
+    on_path = shutil.which(SSM_PLUGIN_EXECUTABLE)
+    if on_path is not None:
+        return on_path
+    if SSM_PLUGIN_WINDOWS_PATH.exists():
+        return str(SSM_PLUGIN_WINDOWS_PATH)
+    return None
+
+
+def installed_ssm_plugin_version() -> tuple[int, ...] | None:
+    executable = resolve_ssm_plugin()
+    if executable is None:
+        return None
+    try:
+        result = subprocess.run(  # noqa: S603 # this is all our own input
+            [executable, "--version"],
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+    except subprocess.CalledProcessError:
+        return None
+    return parse_version(result.stdout)
+
+
+def install_ssm_plugin(*, is_windows: bool) -> None:
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        if is_windows:
+            local_package_path = Path(tmp_dir) / "SessionManagerPluginSetup.exe"
+            # Based on https://docs.aws.amazon.com/systems-manager/latest/userguide/install-plugin-windows.html
+            _ = subprocess.run(  # noqa: S603 # this is all our own input
+                [  # noqa: S607 # curl should always be on PATH
+                    "curl",
+                    f"https://s3.amazonaws.com/session-manager-downloads/plugin/{SSM_PLUGIN_DOWNLOAD_VERSION}/windows/SessionManagerPluginSetup.exe",
+                    "-o",
+                    f"{local_package_path}",
+                ],
+                check=True,
+                timeout=DOWNLOAD_TIMEOUT_SECONDS,
+            )
+            _ = subprocess.run(  # noqa: S603 # this is all our own input
+                [str(local_package_path), "/quiet"],
+                check=True,
+            )
+        else:
+            local_package_path = Path(tmp_dir) / "session-manager-plugin.deb"
+            # Based on https://docs.aws.amazon.com/systems-manager/latest/userguide/install-plugin-debian-and-ubuntu.html
+            _ = subprocess.run(  # noqa: S603 # this is all our own input
+                [  # noqa: S607 # curl should always be on PATH
+                    "curl",
+                    f"https://s3.amazonaws.com/session-manager-downloads/plugin/{SSM_PLUGIN_DOWNLOAD_VERSION}/ubuntu_64bit/session-manager-plugin.deb",
+                    "-o",
+                    f"{local_package_path}",
+                ],
+                check=True,
+                timeout=DOWNLOAD_TIMEOUT_SECONDS,
+            )
+            _ = subprocess.run(  # noqa: S603 # this is all our own input
+                [  # noqa: S607 # sudo should always be on PATH
+                    "sudo",
+                    "dpkg",
+                    "-i",
+                    str(local_package_path),
+                ],
+                check=True,
+            )
+
+
+def ensure_ssm_plugin(*, is_windows: bool) -> None:
+    installed = installed_ssm_plugin_version()
+    if installed is None:
+        print("SSM plugin not found, installing it")  # noqa: T201 # we want the script to print to console for easy viewing
+    elif installed < SSM_PLUGIN_MINIMUM_VERSION:
+        print(  # noqa: T201 # we want the script to print to console for easy viewing
+            f"SSM plugin {'.'.join(str(part) for part in installed)} is older than the required "
+            f"{SSM_PLUGIN_DOWNLOAD_VERSION}, upgrading it"
+        )
+    else:
+        print(  # noqa: T201 # we want the script to print to console for easy viewing
+            f"SSM Plugin Manager Version: {'.'.join(str(part) for part in installed)} "
+            f"(already at least {SSM_PLUGIN_DOWNLOAD_VERSION}, leaving it alone)"
+        )
+        return
+    install_ssm_plugin(is_windows=is_windows)
+    # The installer exits zero without installing anything when the requested version is already
+    # present, so the version has to be read back rather than inferred from the exit code.
+    final = installed_ssm_plugin_version()
+    if final is None or final < SSM_PLUGIN_MINIMUM_VERSION:
+        raise RuntimeError(
+            f"The SSM plugin installer did not produce {SSM_PLUGIN_EXECUTABLE} "
+            f"version {SSM_PLUGIN_DOWNLOAD_VERSION} or newer, it left {final}"
+        )
+    print(f"SSM Plugin Manager Version: {'.'.join(str(part) for part in final)}")  # noqa: T201 # we want the script to print to console for easy viewing
+
+
 def main():
     args = parser.parse_args(sys.argv[1:])
     is_windows = platform.system() == "Windows"
@@ -188,56 +304,7 @@ def main():
     # Task is installed outside the --no-node branch because CI always passes --no-node (pnpm/setup handles pnpm there), and every job still needs the task runner
     install_task(is_windows=is_windows)
     if INSTALL_SSM_PLUGIN_BY_DEFAULT and not args.skip_installing_ssm_plugin:
-        with tempfile.TemporaryDirectory() as tmp_dir:
-            if is_windows:
-                local_package_path = Path(tmp_dir) / "SessionManagerPluginSetup.exe"
-                # Based on https://docs.aws.amazon.com/systems-manager/latest/userguide/install-plugin-windows.html
-                # no specific reason for that version, just pinning it for best practice
-                _ = subprocess.run(  # noqa: S603 # this is all our own input
-                    [  # noqa: S607 # curl should always be on PATH
-                        "curl",
-                        "https://s3.amazonaws.com/session-manager-downloads/plugin/1.2.707.0/windows/SessionManagerPluginSetup.exe",
-                        "-o",
-                        f"{local_package_path}",
-                    ],
-                    check=True,
-                    timeout=DOWNLOAD_TIMEOUT_SECONDS,
-                )
-                _ = subprocess.run(  # noqa: S603 # this is all our own input
-                    [str(local_package_path), "/quiet"],
-                    check=True,
-                )
-            else:
-                local_package_path = Path(tmp_dir) / "session-manager-plugin.deb"
-                # Based on https://docs.aws.amazon.com/systems-manager/latest/userguide/install-plugin-debian-and-ubuntu.html
-                # no specific reason for that version, just pinning it for best practice
-                _ = subprocess.run(  # noqa: S603 # this is all our own input
-                    [  # noqa: S607 # curl should always be on PATH
-                        "curl",
-                        "https://s3.amazonaws.com/session-manager-downloads/plugin/1.2.707.0/ubuntu_64bit/session-manager-plugin.deb",
-                        "-o",
-                        f"{local_package_path}",
-                    ],
-                    check=True,
-                    timeout=DOWNLOAD_TIMEOUT_SECONDS,
-                )
-                _ = subprocess.run(  # noqa: S603 # this is all our own input
-                    [  # noqa: S607 # sudo should always be on PATH
-                        "sudo",
-                        "dpkg",
-                        "-i",
-                        str(local_package_path),
-                    ],
-                    check=True,
-                )
-            print("SSM Plugin Manager Version: ")  # noqa: T201 # we want the script to print to console for easy viewing
-            _ = subprocess.run(
-                [  # noqa: S607 # session-manager-plugin should be on PATH because we just installed it
-                    "session-manager-plugin",
-                    "--version",
-                ],
-                check=True,
-            )
+        ensure_ssm_plugin(is_windows=is_windows)
 
 
 if __name__ == "__main__":
