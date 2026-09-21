@@ -1,0 +1,307 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Cloud Courier",
+    "description": "Agent to upload files to cloud",
+    "version": "0.1.0"
+  },
+  "paths": {
+    "/api/healthcheck": {
+      "get": {
+        "tags": [
+          "system"
+        ],
+        "summary": "Check API health",
+        "operationId": "healthcheck_api_healthcheck_get",
+        "parameters": [
+          {
+            "name": "prependV",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "title": "Prepend V",
+              "description": "Include a 'v' before the version number",
+              "default": false
+            },
+            "description": "Include a 'v' before the version number"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HealthcheckResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/shutdown": {
+      "get": {
+        "tags": [
+          "system"
+        ],
+        "summary": "Shut down the server",
+        "operationId": "shutdown_api_shutdown_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ShutdownResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "HTTPValidationError": {
+        "properties": {
+          "detail": {
+            "items": {
+              "$ref": "#/components/schemas/ValidationError"
+            },
+            "type": "array",
+            "title": "Detail"
+          }
+        },
+        "type": "object",
+        "title": "HTTPValidationError",
+        "description": "Error response returned when request validation fails.",
+        "examples": [
+          {
+            "detail": [
+              {
+                "loc": [
+                  "body",
+                  "field_name"
+                ],
+                "msg": "field required",
+                "type": "missing"
+              }
+            ]
+          }
+        ]
+      },
+      "HealthcheckResponse": {
+        "properties": {
+          "version": {
+            "type": "string",
+            "title": "Version",
+            "description": "Version of the application",
+            "default": "1.0.0",
+            "examples": [
+              "1.0.0"
+            ]
+          }
+        },
+        "type": "object",
+        "title": "HealthcheckResponse",
+        "description": "Result of an API health check.\n\nReports the running application version so a caller can confirm the server is up and identify which\nbuild is currently deployed."
+      },
+      "ShutdownResponse": {
+        "properties": {
+          "message": {
+            "type": "string",
+            "title": "Message",
+            "description": "Message indicating the shutdown request was received",
+            "default": "Shutdown request received. Server will exit shortly.",
+            "examples": [
+              "Shutdown request received. Server will exit shortly."
+            ]
+          }
+        },
+        "type": "object",
+        "title": "ShutdownResponse",
+        "description": "Acknowledgement of a server shutdown request.\n\nReturned immediately when a shutdown is requested; the server process exits shortly after this response\nis sent."
+      },
+      "ValidationError": {
+        "properties": {
+          "loc": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                }
+              ]
+            },
+            "type": "array",
+            "title": "Location"
+          },
+          "msg": {
+            "type": "string",
+            "title": "Message"
+          },
+          "type": {
+            "type": "string",
+            "title": "Error Type"
+          },
+          "input": {
+            "title": "Input"
+          },
+          "ctx": {
+            "type": "object",
+            "title": "Context"
+          }
+        },
+        "type": "object",
+        "required": [
+          "loc",
+          "msg",
+          "type"
+        ],
+        "title": "ValidationError",
+        "description": "Details of a single request validation failure.",
+        "examples": [
+          {
+            "loc": [
+              "body",
+              "field_name"
+            ],
+            "msg": "field required",
+            "type": "missing"
+          }
+        ]
+      },
+      "ProblemDetails": {
+        "description": "RFC 9457 problem details describing an error response.\n\nReturned (as application/problem+json) for error responses so clients and codegen tools such as Kiota\nhave a consistent, machine-readable error shape.",
+        "properties": {
+          "type": {
+            "default": "about:blank",
+            "description": "A URI reference identifying the problem type.",
+            "examples": [
+              "about:blank"
+            ],
+            "title": "Type",
+            "type": "string"
+          },
+          "title": {
+            "description": "A short, human-readable summary of the problem.",
+            "examples": [
+              "Internal Server Error"
+            ],
+            "title": "Title",
+            "type": "string"
+          },
+          "status": {
+            "description": "The HTTP status code for this problem.",
+            "examples": [
+              500
+            ],
+            "format": "int32",
+            "maximum": 599,
+            "minimum": 100,
+            "title": "Status",
+            "type": "integer"
+          },
+          "detail": {
+            "description": "A human-readable explanation specific to this occurrence of the problem.",
+            "examples": [
+              "An unexpected error occurred."
+            ],
+            "title": "Detail",
+            "type": "string",
+            "x-ms-primary-error-message": true
+          },
+          "instance": {
+            "description": "A URI reference identifying this occurrence.",
+            "examples": [
+              "/api/healthcheck"
+            ],
+            "title": "Instance",
+            "type": "string"
+          },
+          "errorType": {
+            "default": null,
+            "description": "The internal exception class name, when available.",
+            "examples": [
+              "ValueError"
+            ],
+            "title": "Error Type",
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "title",
+          "status",
+          "detail",
+          "instance"
+        ],
+        "title": "ProblemDetails",
+        "type": "object"
+      }
+    }
+  },
+  "tags": [
+    {
+      "name": "system",
+      "description": "Server health and lifecycle operations."
+    }
+  ]
+}

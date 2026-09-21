@@ -11,7 +11,8 @@
 use-ignore-files = false
 disable-project-excludes-heuristics = true
 python-platform = "linux"
-project-includes = ["../mutants/src/**"]
+preset = "strict"
+project-includes = ["../backend/mutants/src/**"]
 project-excludes = [
     # paths are relative to this config file (in .config/), so prefix with ../ to anchor at the repo root
     "../**/generated/**",

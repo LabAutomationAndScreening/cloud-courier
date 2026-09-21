@@ -1,5 +1,5 @@
 # ============== WARNING ==============================================================================
-# File is managed by copier template: gh:LabAutomationAndScreening/copier-python-package-template
+# File is managed by copier template: gh:LabAutomationAndScreening/copier-nuxt-python-intranet-app.git
 # See .config/.copier-managed-files.json for details.
 #
 # You are welcome to make changes to this file in your repo if they are custom to your project,
@@ -22,20 +22,17 @@ concurrency:
   group: release
   cancel-in-progress: false
 
-permissions:
-  contents: read # need to explicitly provide this whenever defining permissions because the default value is 'none' for anything not explicitly set when permissions are defined
-
 jobs:
   guard:
-    name: Guard on a passing CI run
     runs-on: ubuntu-24.04
     timeout-minutes: 2
     permissions:
-      contents: read # needed for checkout
+      contents: read # needed for checkout and git ls-remote
       actions: read # needed to query CI workflow runs
     outputs:
       version: ${{ steps.get-version.outputs.version }}
       ci-run-id: ${{ steps.get-ci-run-id.outputs.ci-run-id }}
+      docker-image-tag: ${{ steps.set-docker-image-tag.outputs.docker-image-tag }} # empty on dry run to skip ECR tag push
     steps:
       - name: Fail if real release is not on main
         if: ${{ !inputs.dry_run && github.ref != 'refs/heads/main' }}
@@ -75,71 +72,94 @@ jobs:
           fi
       - name: Checkout code
         uses: actions/checkout@v7.0.1
-      - name: Setup python
-        uses: actions/setup-python@v7.0.0
-        with:
-          python-version: 3.13.9
       - name: Extract project version
         id: get-version
         run: |
-          VERSION=$(python3 .github/workflows/extract_project_version.py pyproject.toml)
+          VERSION=$(python3 .github/workflows/extract_project_version.py backend/pyproject.toml)
           echo "Project version: $VERSION"
           echo "version=$VERSION" >> $GITHUB_OUTPUT
       - name: Check version tag does not already exist
         run: |
-          if python3 .github/workflows/git_tag.py --version "${{ steps.get-version.outputs.version }}" --confirm-tag-not-present; then
-            echo "Tag v${{ steps.get-version.outputs.version }} does not exist yet."
+          VERSION="${{ steps.get-version.outputs.version }}"
+          if python3 .github/workflows/git_tag.py --version "$VERSION" --confirm-tag-not-present; then
+            echo "Tag v$VERSION does not exist yet."
           else
             if [ "${{ inputs.dry_run }}" = "true" ]; then
-              echo "Tag v${{ steps.get-version.outputs.version }} already exists (dry run, continuing)."
+              echo "Tag v$VERSION already exists (dry run, continuing)."
             else
-              echo "Tag v${{ steps.get-version.outputs.version }} already exists. Bump the version before releasing."
+              echo "Tag v$VERSION already exists. Bump the version before releasing."
               exit 1
             fi
           fi
+      - name: Set Docker image tag
+        id: set-docker-image-tag
+        run: |
+          if [ "${{ inputs.dry_run }}" = "true" ]; then
+            echo "docker-image-tag=" >> $GITHUB_OUTPUT
+          else
+            echo "docker-image-tag=${{ steps.get-version.outputs.version }}" >> $GITHUB_OUTPUT
+          fi
 
+
+  build-installer:
+    needs:
+      - guard
+    permissions:
+      contents: read
+      actions: read # download-artifact pulls the tested bundle from the guarded CI run
+    uses: ./.github/workflows/build-installer.yaml
+    with:
+      artifact-run-id: ${{ needs.guard.outputs.ci-run-id }}
 
   release:
     name: Create GitHub Release
-    if: ${{ !inputs.dry_run }}
     runs-on: ubuntu-24.04
     timeout-minutes: 2
     needs:
       - guard
+      - build-installer
     permissions:
       contents: write # needed to create GitHub releases
-      actions: read # needed to download the executable artifacts from the CI run
+      actions: read # needed to download artifacts from CI runs
     steps:
-      - name: Download executable artifact (ubuntu-24.04 py3.13.9)
-        uses: actions/download-artifact@v8.0.1
-        with:
-          name: exe-ubuntu-24.04-3.13.9
-          path: artifacts/ubuntu-24.04-3.13.9
-          run-id: ${{ needs.guard.outputs.ci-run-id }}
-          github-token: ${{ github.token }}
-      - name: Package executable (ubuntu-24.04 py3.13.9)
-        shell: bash
-        run: tar -cf "cloud-courier-ubuntu-24.04-3.13.9-v${{ needs.guard.outputs.version }}.tar" -C "artifacts/ubuntu-24.04-3.13.9" .
 
-      - name: Download executable artifact (windows-2025-vs2026 py3.13.9)
+      - name: Download executable artifact (ubuntu-24.04)
         uses: actions/download-artifact@v8.0.1
         with:
-          name: exe-windows-2025-vs2026-3.13.9
-          path: artifacts/windows-2025-vs2026-3.13.9
+          name: built-cloud-courier-ubuntu-24.04
+          path: artifacts/ubuntu-24.04
           run-id: ${{ needs.guard.outputs.ci-run-id }}
           github-token: ${{ github.token }}
-      - name: Package executable (windows-2025-vs2026 py3.13.9)
-        shell: bash
-        run: (cd "artifacts/windows-2025-vs2026-3.13.9" && zip -r "../../cloud-courier-windows-2025-vs2026-3.13.9-v${{ needs.guard.outputs.version }}.zip" .)
+      - name: Prepare release asset (ubuntu-24.04)
+        run: mv artifacts/ubuntu-24.04/app.tar cloud-courier-ubuntu-24.04-v${{ needs.guard.outputs.version }}.tar
+
+      - name: Download executable artifact (windows-2025-vs2026)
+        uses: actions/download-artifact@v8.0.1
+        with:
+          name: built-cloud-courier-windows-2025-vs2026
+          path: artifacts/windows-2025-vs2026
+          run-id: ${{ needs.guard.outputs.ci-run-id }}
+          github-token: ${{ github.token }}
+      - name: Prepare release asset (windows-2025-vs2026)
+        run: (cd artifacts/windows-2025-vs2026 && zip -r ../../cloud-courier-windows-2025-vs2026-v${{ needs.guard.outputs.version }}.zip .)
+
+      - name: Download Windows installer (MSI + install guide)
+        uses: actions/download-artifact@v8.0.1
+        with:
+          name: cloud-courier-windows-2025-vs2026-installer
+          path: artifacts/windows-installer
+      - name: Prepare release asset (Windows installer)
+        run: (cd artifacts/windows-installer && zip -r ../../cloud-courier-windows-2025-vs2026-installer-v${{ needs.guard.outputs.version }}.zip .)
 
       - name: Create GitHub Release
+        if: ${{ !inputs.dry_run }}
         uses: softprops/action-gh-release@v3.0.3
         with:
           tag_name: v${{ needs.guard.outputs.version }}
-          target_commitish: ${{ github.sha }}
           name: cloud-courier v${{ needs.guard.outputs.version }}
           generate_release_notes: true
           fail_on_unmatched_files: true
           files: |
-            cloud-courier-ubuntu-24.04-3.13.9-v${{ needs.guard.outputs.version }}.tar
-            cloud-courier-windows-2025-vs2026-3.13.9-v${{ needs.guard.outputs.version }}.zip
+            cloud-courier-ubuntu-24.04-v${{ needs.guard.outputs.version }}.tar
+            cloud-courier-windows-2025-vs2026-v${{ needs.guard.outputs.version }}.zip
+            cloud-courier-windows-2025-vs2026-installer-v${{ needs.guard.outputs.version }}.zip

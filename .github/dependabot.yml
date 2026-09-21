@@ -20,7 +20,7 @@ updates:
           - "version-update:semver-patch" # we don't want to be bothered with patch updates for anything except security updates
   - package-ecosystem: "uv"
     directories:
-      - "/"
+      - "/backend"
     schedule:
       interval: "weekly"
       day: "sunday"
@@ -38,6 +38,30 @@ updates:
           - "version-update:semver-minor"
           - "version-update:semver-patch"
 
+    groups:
+      prod-dependencies:
+        dependency-type: "production"
+        update-types:
+          - "minor"
+      dev-dependencies:
+        dependency-type: "development"
+        update-types:
+          - "minor"
+  - package-ecosystem: "npm"
+    directories:
+      - "/frontend"
+    schedule:
+      interval: "weekly"
+      day: "wednesday"
+      time: "12:00"
+    open-pull-requests-limit: 5
+    ignore:
+      - dependency-name: "*"
+        update-types:
+          - "version-update:semver-patch" # we don't want to be bothered with patch updates for anything except security updates
+      - dependency-name: "@types/node"
+        update-types:
+          - "version-update:semver-major" # @types/node major should be pinned to the node engine itself
     groups:
       prod-dependencies:
         dependency-type: "production"

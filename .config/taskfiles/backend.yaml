@@ -1,0 +1,19 @@
+# ============== WARNING ==============================================================================
+# File is managed by copier template: gh:LabAutomationAndScreening/copier-nuxt-python-intranet-app.git
+# See .config/.copier-managed-files.json for details.
+#
+# You are welcome to make changes to this file in your repo if they are custom to your project,
+# but if the change should be shared with other projects, please backport it to the template repo.
+# =====================================================================================================
+version: '3'
+
+tasks:
+  dev-backend:
+    desc: Start the API server on port 4000 with autoreload (does not write log files)
+    cmds:
+      - uv --directory=backend run uvicorn src.entrypoint:app --reload --host '::' --port 4000
+
+  run-backend-entrypoint:
+    desc: Run the backend through its CLI entrypoint on port 4000, which accepts CLI options and logs to file
+    cmds:
+      - uv --directory=backend run python src/entrypoint.py

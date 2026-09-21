@@ -1,0 +1,35 @@
+# ============== WARNING ==============================================================================
+# File is managed by copier template: gh:LabAutomationAndScreening/copier-nuxt-python-intranet-app.git
+# See .config/.copier-managed-files.json for details.
+#
+# You are welcome to make changes to this file in your repo if they are custom to your project,
+# but if the change should be shared with other projects, please backport it to the template repo.
+# =====================================================================================================
+services:
+  backend:
+    image: 183631337349.dkr.ecr.us-east-1.amazonaws.com/cloud-courier-backend:latest
+    container_name: cloud-courier-backend
+    ports:
+      - "4000:4000"
+    pull_policy: never  # Prevents Docker from pulling the image
+    restart: unless-stopped
+    networks:
+      - internal_net
+
+  frontend:
+    image: 183631337349.dkr.ecr.us-east-1.amazonaws.com/cloud-courier-frontend:latest
+    container_name: cloud-courier-frontend
+    ports:
+      - "3000:3000"
+    depends_on:
+      - backend
+    environment:
+      GRAPHQL_API_URL: http://backend:4000/api/graphql
+    pull_policy: never  # Prevents Docker from pulling the image
+    restart: unless-stopped
+    networks:
+      - internal_net
+
+networks:
+  internal_net:
+    internal: false

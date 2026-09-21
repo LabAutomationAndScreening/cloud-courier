@@ -1,0 +1,85 @@
+# ============== WARNING ==============================================================================
+# File is managed by copier template: gh:LabAutomationAndScreening/copier-nuxt-python-intranet-app.git
+# See .config/.copier-managed-files.json for details.
+#
+# You are welcome to make changes to this file in your repo if they are custom to your project,
+# but if the change should be shared with other projects, please backport it to the template repo.
+# =====================================================================================================
+[project]
+name = "backend-api"
+version = "0.1.0"
+description = "Agent to upload files to cloud"
+
+readme = "README.md"
+requires-python = ">=3.13.9"
+
+dependencies = [
+    # Specific to this repository
+
+    # Managed by upstream template
+    "fastapi>=0.141.1",
+    "fastapi-offline>=1.7.7",
+    "starlette>=1.6.0",
+    "uuid-utils>=1.0.0",
+    "pip-system-certs>=5.3",
+    "pywin32>=312; sys_platform == 'win32'",
+    "pydantic>=2.13.5",
+    "uvicorn>=0.53.0",
+    "structlog>=26.1.0",
+]
+
+
+[dependency-groups]
+dev = [
+    # Specific to this repository
+
+
+    # Managed by upstream template
+    "httpx>=0.28.1",
+    "microsoft-kiota-bundle>=1.12.3",
+    "httpx2>=2.13.0",
+    "pyhumps>=3.8.0",
+    "pyrefly>=1.3.1",
+    "syrupy>=6.1.1",
+    "mutmut>=3.8.0",
+    "pytest>=9.1.1",
+    "pytest-cov>=7.1.0",
+    "pytest-randomly>=5.0.0",
+    "pytest-mock>=3.15.1",
+    "pytest-timeout>=2.4.0",
+    "pytest-asyncio>=1.4.0",
+    "pyinstaller>=6.22.3",
+]
+
+[tool.uv]
+package = true
+
+[tool.mutmut]
+source_paths = [ "src/backend_api/" ]
+pytest_add_cli_args_test_selection = [ "tests/unit/" ]
+pytest_add_cli_args = [ "--no-cov" ]
+also_copy = [
+    "src/static",
+    ]
+mutate_only_covered_lines = true
+do_not_mutate = [   "*/generated/*" , # do not mutate generated code, this is created by external tooling that has undergone its own testing
+                    "*/logger_config.py", # not thoroughly tested
+                    "*/app_runner.py", # not thoroughly tested
+                    "*/fast_api_exception_handlers.py", # not thoroughly tested
+                    "*/base/lib.py", # not thoroughly tested here, needs to become a library
+ ]
+# mutmut runs this from backend/mutants/. The dedicated config points pyrefly at the generated
+# mutants tree and excludes do_not_mutate files, so every reported type error falls inside a mutant
+# function and mutmut can attribute it. Without it, pyrefly checks the real source from the mutants/
+# cwd and reports errors on non-mutant lines, crashing with "Could not find mutant for type error".
+type_check_command = ['uv', 'run', 'pyrefly', 'check', '--output-format=json', '-c', '../../.config/pyrefly.mutmut.toml']
+do_not_mutate_patterns = [
+    # disable mutations of all logger.info/debug/... statements
+    'logger\.\w+',
+    # disable mutations of assert statements (for type narrowing...it often messes with the messages)
+    'assert .+',
+    'f"Expected .+,.+got.+\{type\(.+\}.+\{.+',
+    # disable mutating untested exceptions
+    'raise NotImplementedError.+',
+    'raise AssertionError.+',
+]

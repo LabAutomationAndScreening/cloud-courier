@@ -8,6 +8,12 @@ omit =
     # omit CircuitPython firmware
     */firmware/code.py
     */firmware/boot.py
+    # code is tested in upstream copier template
+    */src/backend_api/openapi_schema_simplifier.py
+    # a pyinstaller entrypoint cannot be unit tested, only E2E tested
+    */src/entrypoint.py
+    # Windows service class is tested via Windows CI E2E, not unit tests
+    */src/backend_api/entrypoint/win_service.py
 
 [report]
 # Regexes for lines to exclude from consideration
@@ -24,6 +30,9 @@ exclude_also =
 
     # Abstract methods inherently can't be hit
     @abstractmethod
+
+    # CircuitPython-specific code can't be tested in CPython
+    if sys.implementation.name == "circuitpython":
 
 fail_under = 100
 [html]

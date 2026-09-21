@@ -1,0 +1,39 @@
+# ============== WARNING ==============================================================================
+# File is managed by copier template: gh:LabAutomationAndScreening/copier-nuxt-python-intranet-app.git
+# See .config/.copier-managed-files.json for details.
+#
+# You are welcome to make changes to this file in your repo if they are custom to your project,
+# but if the change should be shared with other projects, please backport it to the template repo.
+# =====================================================================================================
+version: '3'
+
+tasks:
+  codegen:
+    desc: Regenerate every generated client in the repo
+    cmds:
+      - task: gen-backend-openapi-client
+      - task: gen-frontend-openapi-client
+
+  gen-openapi-snapshot:
+    desc: Regenerate the openapi.json snapshot that both OpenAPI clients are generated from
+    # `run: once` so the umbrella task refreshes the snapshot a single time rather than once per dependent client
+    run: once
+    cmds:
+      # --no-cov because pytest.ini always adds --cov and .coveragerc sets fail_under=100, so a single-file run
+      # would exit 1 on coverage even though the snapshot was written; -p no:tach since module-boundary checking
+      # has nothing to say about regenerating a snapshot
+      - uv --directory=backend run pytest tests/unit/test_basic_server_functionality.py --snapshot-update --no-cov -p no:tach
+
+  gen-backend-openapi-client:
+    desc: Regenerate the Python Kiota client that the backend E2E tests import
+    deps: [gen-openapi-snapshot]
+    cmds:
+      - mkdir -p "./backend/tests/e2e/generated/open_api/backend"
+      - docker run --rm --user $(id -u):$(id -g) -v "./backend/tests/e2e/generated/open_api/backend:/app/output" -v "./backend/tests/unit/__snapshots__/test_basic_server_functionality/test_openapi_schema.json:/app/openapi.json" mcr.microsoft.com/openapi/kiota:1.32.4 generate -l python -c BackendClient -n client -d openapi.json --exclude-backward-compatible --clean-output --additional-data false
+      - uv --directory=backend run python kiota_nullable_fixer.py "./tests/unit/__snapshots__/test_basic_server_functionality/test_openapi_schema.json" "./tests/e2e/generated/open_api/backend"
+
+  gen-frontend-openapi-client:
+    desc: Regenerate the TypeScript Kiota client that the frontend imports
+    deps: [gen-openapi-snapshot]
+    cmds:
+      - pnpm --dir=frontend openapi-codegen

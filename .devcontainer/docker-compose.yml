@@ -17,10 +17,13 @@ services:
     volumes:
       - ..:/workspaces/cloud-courier:cached
       # Break out the venv folder as a separate docker volume for better performance on Windows hosts
-      - python_venv:/workspaces/cloud-courier/.venv
+      - python_venv:/workspaces/cloud-courier/backend/.venv
+      # Break out the pnpm store folder as a separate docker volume for better performance on Windows hosts
+      - pnpm_store:/workspaces/cloud-courier/.pnpm-store
+      - frontend_code_libraries:/workspaces/cloud-courier/node_modules
     command: sleep infinity
     ports:
-      - "61335:2222"
+      - "51779:2222"
     environment:
       - AWS_PROFILE=localstack
       - AWS_DEFAULT_REGION=us-east-1
@@ -43,16 +46,9 @@ services:
       - DOLT_DATABASE=beads_work
       - DOLT_DISABLE_EVENT_FLUSH=1 # dolt contacts doltremoteapi.dolthub.com with usage metrics by default, even with no remotes configured (see beads SECURITY.md)
 
-  localstack:
-    image: localstack/localstack:4.14.0 # no known reason for not using newer versions, just pinning for best practice
-    container_name: localstack
-    ports:
-      - "4566:4566"  # Main edge port for all AWS service emulation
-    environment:
-      # really cryptic error messages unless DEBUG is set
-      - DEBUG=1
-      - SERVICES=s3,sts,cloudwatch,ssm,events,iam
 
 volumes:
   beads_dolt_data: {}
   python_venv: {}
+  pnpm_store: {}
+  frontend_code_libraries: {}

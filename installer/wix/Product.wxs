@@ -1,0 +1,200 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs"
+     xmlns:ui="http://wixtoolset.org/schemas/v4/wxs/ui"
+     xmlns:util="http://wixtoolset.org/schemas/v4/wxs/util">
+
+  <!-- UpgradeCode is fixed for life. Never change it. -->
+  <?define UpgradeCode = "65bd762e-bd98-4ead-ae8f-2eeee6f1d754" ?>
+
+  <!-- InstallerVersion="500" below = minimum Windows Installer engine 5.0 (500 = 5.00).
+       Ships with every supported Windows (10/11, Server 2016+); required for
+       perMachine + modern features. -->
+  <Package
+      Name="Cloud Courier"
+      Manufacturer="Lab Automation and SCreening"
+      Version="$(ProductVersion)"
+      UpgradeCode="$(UpgradeCode)"
+      Scope="perMachine"
+      InstallerVersion="500"
+      Compressed="yes">
+
+    <MajorUpgrade
+        AllowDowngrades="no"
+        AllowSameVersionUpgrades="yes"
+        DowngradeErrorMessage="A newer version of Cloud Courier is already installed."
+        Schedule="afterInstallInitialize" />
+
+    <MediaTemplate EmbedCab="yes" />
+
+    <Icon Id="CloudCourierIcon" SourceFile="$(BrandingDir)\favicon.ico" />
+    <Property Id="ARPPRODUCTICON" Value="CloudCourierIcon" />
+
+    <!-- Service runtime + account selection. The UI sets these interactively;
+         a silent install (msiexec /qn) sets them on the command line. -->
+    <Property Id="PORT" Value="4000" Secure="yes" />
+    <Property Id="SERVICE_ACCOUNT" Value="LocalSystem" Secure="yes" />
+    <Property Id="SERVICE_USER" Secure="yes" />
+    <Property Id="SERVICE_PASSWORD" Secure="yes" Hidden="yes" />
+
+    <!-- Keep the service password out of the verbose MSI log (/l*v). CA_InstallService is the
+         derived deferred-CA command line that embeds [SERVICE_PASSWORD]; Hidden keeps its value
+         out of the log (WiX builds MsiHiddenProperties from these Hidden flags). -->
+    <Property Id="CA_InstallService" Hidden="yes" />
+
+    <!-- Network bind address: "1" => 0.0.0.0 (reachable from other computers), "0" => 127.0.0.1.
+         The BindAddressDlg sets this interactively; a silent install sets ALLOW_REMOTE on the command line. -->
+    <Property Id="ALLOW_REMOTE" Value="0" Secure="yes" />
+
+
+    <!-- WixUI plumbing: install-dir target, post-install launch checkbox. -->
+    <Property Id="WIXUI_INSTALLDIR" Value="INSTALLFOLDER" />
+    <Property Id="WIXUI_EXITDIALOGOPTIONALCHECKBOX" Value="1" />
+    <Property Id="WIXUI_EXITDIALOGOPTIONALCHECKBOXTEXT" Value="Open Cloud Courier" />
+    <WixVariable Id="WixUILicenseRtf" Value="$(LicenseRtf)" />
+
+    <Feature Id="CloudCourier" Title="Cloud Courier" Level="1">
+      <ComponentGroupRef Id="StagedFiles" />
+      <ComponentGroupRef Id="DataFolder" />
+    </Feature>
+
+    <StandardDirectory Id="ProgramFiles64Folder">
+      <Directory Id="LabAutomationandSCreeningCompany" Name="LabAutomationandSCreening">
+        <Directory Id="INSTALLFOLDER" Name="CloudCourier" />
+      </Directory>
+    </StandardDirectory>
+
+    <StandardDirectory Id="CommonAppDataFolder">
+      <Directory Id="LabAutomationandSCreeningData" Name="LabAutomationandSCreening">
+        <Directory Id="CloudCourierData" Name="CloudCourier">
+          <Directory Id="LogsFolder" Name="logs" />
+        </Directory>
+      </Directory>
+    </StandardDirectory>
+
+    <!-- Harvest the whole staging tree into INSTALLFOLDER: app\ (the exe
+         + _internal\) and scripts\. -->
+    <ComponentGroup Id="StagedFiles" Directory="INSTALLFOLDER">
+      <Files Include="$(StagingDir)\**" />
+    </ComponentGroup>
+
+    <!-- Writable log dir outside Program Files; a custom service account is
+         granted Modify at runtime by install-service.ps1 once its name is known. -->
+    <ComponentGroup Id="DataFolder">
+      <Component Id="EnsureLogsFolder" Directory="LogsFolder" Guid="*">
+        <CreateFolder>
+          <util:PermissionEx User="SYSTEM" GenericAll="yes" />
+          <util:PermissionEx User="Administrators" GenericAll="yes" />
+        </CreateFolder>
+        <RegistryValue Root="HKLM" Key="Software\LabAutomationandSCreening\CloudCourier" Name="DataStamped" Type="integer" Value="1" KeyPath="yes" />
+      </Component>
+    </ComponentGroup>
+
+    <!-- Service lifecycle via the exe's own `service install` verb (see ARCHITECTURE.md). -->
+    <!-- "Wix4" in Wix4UtilCA_X64 is the WixToolset.Util schema generation, not the
+         toolset version; the id must match the schema, so it stays "Wix4" under WiX 7. -->
+    <SetProperty Id="CA_InstallService"
+                 Value="&quot;[System64Folder]WindowsPowerShell\v1.0\powershell.exe&quot; -ExecutionPolicy Bypass -NoProfile -File &quot;[INSTALLFOLDER]scripts\install-service.ps1&quot; -ExePath &quot;[INSTALLFOLDER]app\cloud-courier.exe&quot; -Port &quot;[PORT]&quot; -LogDir &quot;[CommonAppDataFolder]LabAutomationandSCreening\CloudCourier\logs&quot; -ServiceAccount &quot;[SERVICE_ACCOUNT]&quot; -User &quot;[SERVICE_USER]&quot; -Password &quot;[SERVICE_PASSWORD]&quot; -AllowRemote &quot;[ALLOW_REMOTE]&quot;"
+                 Before="CA_InstallService"
+                 Sequence="execute" />
+    <!-- WixSilentExec (not WixQuietExec) so the util CA does not log the command line it runs;
+         that command line contains -Password "[SERVICE_PASSWORD]". -->
+    <CustomAction Id="CA_InstallService" DllEntry="WixSilentExec" BinaryRef="Wix4UtilCA_X64" Execute="deferred" Impersonate="no" Return="check" />
+
+    <SetProperty Id="CA_RemoveService"
+                 Value="&quot;[System64Folder]WindowsPowerShell\v1.0\powershell.exe&quot; -ExecutionPolicy Bypass -NoProfile -File &quot;[INSTALLFOLDER]scripts\remove-service.ps1&quot; -ExePath &quot;[INSTALLFOLDER]app\cloud-courier.exe&quot;"
+                 Before="CA_RemoveService"
+                 Sequence="execute" />
+    <CustomAction Id="CA_RemoveService" DllEntry="WixQuietExec" BinaryRef="Wix4UtilCA_X64" Execute="deferred" Impersonate="no" Return="ignore" />
+
+    <!-- Post-install browser launch (UI sequence only, so /qn never launches). -->
+    <!-- Format the launch target from the chosen [PORT] before the install runs;
+         WixShellExec (fired on Finish) then opens the app on the right port. -->
+    <SetProperty Id="WixShellExecTarget" Value="http://127.0.0.1:[PORT]/" Sequence="ui" Before="ExecuteAction" />
+    <CustomAction Id="LaunchApplication" DllEntry="WixShellExec" BinaryRef="Wix4UtilCA_X64" Execute="immediate" Impersonate="yes" Return="ignore" />
+
+    <InstallExecuteSequence>
+      <Custom Action="CA_InstallService" After="InstallFiles" Condition="NOT Installed" />
+      <Custom Action="CA_RemoveService" Before="RemoveFiles" Condition="REMOVE=&quot;ALL&quot;" />
+    </InstallExecuteSequence>
+
+    <ui:WixUI Id="WixUI_InstallDir" />
+
+    <UI>
+      <ProgressText Action="CA_InstallService" Message="Registering and starting the Cloud Courier service..." />
+      <ProgressText Action="CA_RemoveService" Message="Stopping and removing the Cloud Courier service..." />
+
+      <!-- Wizard order: InstallDirDlg -> ServiceAccountDlg -> BindAddressDlg -> VerifyReadyDlg. -->
+      <Publish Dialog="InstallDirDlg" Control="Next" Event="NewDialog" Value="ServiceAccountDlg" Order="999" Condition="1" />
+      <Publish Dialog="ServiceAccountDlg" Control="Back" Event="NewDialog" Value="InstallDirDlg" Condition="1" />
+      <Publish Dialog="ServiceAccountDlg" Control="Next" Event="NewDialog" Value="BindAddressDlg" Condition="1" />
+      <Publish Dialog="BindAddressDlg" Control="Back" Event="NewDialog" Value="ServiceAccountDlg" Condition="1" />
+      <Publish Dialog="BindAddressDlg" Control="Next" Event="NewDialog" Value="VerifyReadyDlg" Condition="1" />
+      <Publish Dialog="VerifyReadyDlg" Control="Back" Event="NewDialog" Value="BindAddressDlg" Order="999" Condition="1" />
+
+
+      <!-- Launch the app on Finish when the optional checkbox is ticked. -->
+      <Publish Dialog="ExitDialog" Control="Finish" Event="DoAction" Value="LaunchApplication" Condition="WIXUI_EXITDIALOGOPTIONALCHECKBOX = 1 and NOT Installed" />
+    </UI>
+  </Package>
+
+  <Fragment>
+    <UI>
+      <Dialog Id="ServiceAccountDlg" Width="370" Height="270" Title="[ProductName] Setup">
+        <Control Id="BannerBitmap" Type="Bitmap" X="0" Y="0" Width="370" Height="44" TabSkip="no" Text="WixUI_Bmp_Banner" />
+        <Control Id="BannerLine" Type="Line" X="0" Y="44" Width="370" Height="0" />
+        <Control Id="BottomLine" Type="Line" X="0" Y="234" Width="370" Height="0" />
+        <Control Id="Title" Type="Text" X="15" Y="6" Width="220" Height="15" Transparent="yes" NoPrefix="yes" Text="{\WixUI_Font_Title}Service account" />
+        <Control Id="Description" Type="Text" X="25" Y="23" Width="330" Height="15" Transparent="yes" NoPrefix="yes" Text="Choose the Windows account the Cloud Courier service runs as." />
+
+        <Control Id="AccountGroup" Type="RadioButtonGroup" Property="SERVICE_ACCOUNT" X="20" Y="55" Width="335" Height="40">
+          <RadioButtonGroup Property="SERVICE_ACCOUNT">
+            <RadioButton Value="LocalSystem" X="0" Y="0" Width="330" Height="16" Text="LocalSystem (recommended)" />
+            <RadioButton Value="custom" X="0" Y="20" Width="330" Height="16" Text="A specific low-privilege account" />
+          </RadioButtonGroup>
+        </Control>
+
+        <Control Id="UserLabel" Type="Text" X="35" Y="105" Width="80" Height="15" Text="User name:" />
+        <Control Id="UserEdit" Type="Edit" X="120" Y="103" Width="210" Height="16" Property="SERVICE_USER" />
+        <Control Id="PwdLabel" Type="Text" X="35" Y="129" Width="80" Height="15" Text="Password:" />
+        <Control Id="PwdEdit" Type="Edit" X="120" Y="127" Width="210" Height="16" Property="SERVICE_PASSWORD" Password="yes" />
+        <Control Id="Hint" Type="Text" X="35" Y="152" Width="315" Height="40" Transparent="yes" NoPrefix="yes" Text="Enter a local account as .\name or DOMAIN\name. It is granted 'Log on as a service'." />
+
+        <Control Id="Back" Type="PushButton" X="180" Y="243" Width="56" Height="17" Text="!(loc.WixUIBack)" />
+        <Control Id="Next" Type="PushButton" X="236" Y="243" Width="56" Height="17" Default="yes" Text="!(loc.WixUINext)"
+                 DisableCondition="SERVICE_ACCOUNT = &quot;custom&quot; AND (SERVICE_USER = &quot;&quot; OR SERVICE_PASSWORD = &quot;&quot;)"
+                 EnableCondition="SERVICE_ACCOUNT &lt;&gt; &quot;custom&quot; OR (SERVICE_USER &lt;&gt; &quot;&quot; AND SERVICE_PASSWORD &lt;&gt; &quot;&quot;)" />
+        <Control Id="Cancel" Type="PushButton" X="304" Y="243" Width="56" Height="17" Cancel="yes" Text="!(loc.WixUICancel)">
+          <Publish Event="SpawnDialog" Value="CancelDlg" />
+        </Control>
+      </Dialog>
+    </UI>
+  </Fragment>
+
+  <Fragment>
+    <UI>
+      <Dialog Id="BindAddressDlg" Width="370" Height="270" Title="[ProductName] Setup">
+        <Control Id="BannerBitmap" Type="Bitmap" X="0" Y="0" Width="370" Height="44" TabSkip="no" Text="WixUI_Bmp_Banner" />
+        <Control Id="BannerLine" Type="Line" X="0" Y="44" Width="370" Height="0" />
+        <Control Id="BottomLine" Type="Line" X="0" Y="234" Width="370" Height="0" />
+        <Control Id="Title" Type="Text" X="15" Y="6" Width="220" Height="15" Transparent="yes" NoPrefix="yes" Text="{\WixUI_Font_Title}Network access" />
+        <Control Id="Description" Type="Text" X="25" Y="23" Width="330" Height="15" Transparent="yes" NoPrefix="yes" Text="Choose which computers may reach the Cloud Courier service." />
+
+        <Control Id="BindGroup" Type="RadioButtonGroup" Property="ALLOW_REMOTE" X="20" Y="55" Width="335" Height="60">
+          <RadioButtonGroup Property="ALLOW_REMOTE">
+            <RadioButton Value="0" X="0" Y="0" Width="330" Height="16" Text="Local connections only (127.0.0.1)" />
+            <RadioButton Value="1" X="0" Y="24" Width="330" Height="16" Text="Allow connections from other computers (0.0.0.0)" />
+          </RadioButtonGroup>
+        </Control>
+
+        <Control Id="Hint" Type="Text" X="35" Y="120" Width="315" Height="60" Transparent="yes" NoPrefix="yes" Text="Local only is the safest choice. Allow connections from other computers if this service must be reachable across the network (for example, remote health checks or access to attached devices). The installer opens the required firewall rules automatically." />
+
+        <Control Id="Back" Type="PushButton" X="180" Y="243" Width="56" Height="17" Text="!(loc.WixUIBack)" />
+        <Control Id="Next" Type="PushButton" X="236" Y="243" Width="56" Height="17" Default="yes" Text="!(loc.WixUINext)" />
+        <Control Id="Cancel" Type="PushButton" X="304" Y="243" Width="56" Height="17" Cancel="yes" Text="!(loc.WixUICancel)">
+          <Publish Event="SpawnDialog" Value="CancelDlg" />
+        </Control>
+      </Dialog>
+    </UI>
+  </Fragment>
+
+</Wix>

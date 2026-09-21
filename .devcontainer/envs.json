@@ -1,7 +1,12 @@
 [
   {
-    "description": "main",
-    "relative_directory": ".",
+    "description": "frontend",
+    "relative_directory": "frontend",
+    "package_manager": "pnpm"
+  },
+  {
+    "description": "backend",
+    "relative_directory": "backend",
     "package_manager": "uv"
   }
 ]

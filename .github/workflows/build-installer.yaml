@@ -1,0 +1,108 @@
+# ============== WARNING ==============================================================================
+# File is managed by copier template: gh:LabAutomationAndScreening/copier-nuxt-python-intranet-app.git
+# See .config/.copier-managed-files.json for details.
+#
+# You are welcome to make changes to this file in your repo if they are custom to your project,
+# but if the change should be shared with other projects, please backport it to the template repo.
+# =====================================================================================================
+name: Build Windows Installer
+
+on:
+  workflow_dispatch:
+  workflow_call:
+    inputs:
+      artifact-run-id:
+        type: string
+        required: false
+        # Empty downloads from the current run (CI); a CI run id downloads
+        # cross-run (release pulling the bundle the suite validated).
+        default: ''
+      artifact-retention-days:
+        type: number
+        required: false
+        default: 14
+
+permissions:
+  contents: read
+  actions: read # download-artifact needs this to pull a bundle from another run (release)
+
+jobs:
+  build-installer:
+    name: Build Windows Installer
+    runs-on: windows-2025-vs2026
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up .NET SDK
+        uses: actions/setup-dotnet@v6.0.0
+        with:
+          dotnet-version: '8.0.424'
+
+      - name: Install WiX 7
+        shell: pwsh
+        run: |
+          dotnet tool install --global wix --version 7.0.0
+          "$env:USERPROFILE\.dotnet\tools" | Out-File -FilePath $env:GITHUB_PATH -Append
+          & "$env:USERPROFILE\.dotnet\tools\wix.exe" eula accept wix7
+
+      - name: Resolve CI run id for the bundle
+        id: resolve-run
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PROVIDED_RUN_ID: ${{ inputs.artifact-run-id }}
+          EVENT_NAME: ${{ github.event_name }}
+        run: |
+          if [ -n "$PROVIDED_RUN_ID" ]; then
+            # Release passes the guarded CI run explicitly.
+            echo "Using provided artifact-run-id: $PROVIDED_RUN_ID"
+            echo "run-id=$PROVIDED_RUN_ID" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          if [ "$EVENT_NAME" != "workflow_dispatch" ]; then
+            # Called from ci.yaml within the same run (pull_request/push): the
+            # bundle was built earlier in this run, so use the current run id.
+            echo "Using current run id: ${{ github.run_id }}"
+            echo "run-id=${{ github.run_id }}" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          # Standalone manual build (workflow_dispatch): no bundle in this run, so
+          # reuse the most recent successful ci.yaml run for this commit.
+          ALL_RUNS=$(gh api "/repos/${{ github.repository }}/actions/workflows/ci.yaml/runs?head_sha=${{ github.sha }}")
+          LATEST_RUN=$(echo "$ALL_RUNS" | jq '.workflow_runs | first')
+          RUN_ID=$(echo "$LATEST_RUN" | jq -r '.id')
+          STATUS=$(echo "$LATEST_RUN" | jq -r '.status')
+          CONCLUSION=$(echo "$LATEST_RUN" | jq -r '.conclusion')
+          echo "Most recent ci.yaml run for ${{ github.sha }}: id=$RUN_ID status=$STATUS conclusion=$CONCLUSION"
+          if [ "$RUN_ID" = "null" ] || [ "$STATUS" != "completed" ] || [ "$CONCLUSION" != "success" ]; then
+            echo "No successful ci.yaml run found for ${{ github.sha }}. Pass artifact-run-id or wait for CI to pass." >&2
+            exit 1
+          fi
+          echo "run-id=$RUN_ID" >> "$GITHUB_OUTPUT"
+
+      - name: Download built bundle
+        uses: actions/download-artifact@v8.0.1
+        with:
+          name: built-cloud-courier-windows-2025-vs2026
+          path: backend/dist/cloud-courier
+          run-id: ${{ steps.resolve-run.outputs.run-id }}
+          github-token: ${{ github.token }}
+
+      - name: Build installer
+        shell: pwsh
+        run: |
+          $buildArgs = @{}
+          ./installer/package.ps1 @buildArgs
+
+      - name: Upload installer
+        uses: actions/upload-artifact@v7.0.1
+        with:
+          name: cloud-courier-windows-2025-vs2026-installer
+          path: |
+            installer/dist/CloudCourier-*.msi
+            installer/dist/INSTALL.txt
+          if-no-files-found: error
+          retention-days: ${{ inputs.artifact-retention-days }}

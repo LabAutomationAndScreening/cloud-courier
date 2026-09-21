@@ -1,0 +1,118 @@
+CLOUD COURIER - INSTALLATION GUIDE
+===============================
+
+CloudCourier-<version>.msi installs Cloud Courier as a Windows service.
+
+
+WHAT IT INSTALLS
+----------------
+
+- The Cloud Courier application under:
+      C:\Program Files\LabAutomationandSCreening\CloudCourier\
+- A Windows service named "LabAutomationAndScreening-cloud-courier" that serves the app at:
+      http://127.0.0.1:4000
+- A log directory (kept on upgrade and uninstall) under:
+      C:\ProgramData\LabAutomationandSCreening\CloudCourier\logs\
+
+
+REQUIREMENTS
+------------
+
+- 64-bit Windows 10/11 or Windows Server 2025
+- Administrator rights to install (it registers a system service).
+
+
+INTERACTIVE INSTALL
+-------------------
+
+1. Double-click CloudCourier-<version>.msi and accept the elevation prompt.
+
+2. Accept the license and confirm the install location.
+
+3. On the "Service account" page, choose how the service runs:
+
+   - LocalSystem (default, recommended).
+
+   - A specific low-privilege account. Enter the user as .\name (local) or
+     DOMAIN\name, plus the password. The installer grants that account the
+     "Log on as a service" right.
+
+4. On the "Network access" page, choose which computers may reach the service:
+
+   - Local connections only (127.0.0.1) - the default.
+
+   - Allow connections from other computers (0.0.0.0). The
+     installer opens the required Windows Firewall rules automatically.
+
+5. Finish the install. Leave "Open Cloud Courier" checked to open
+   http://127.0.0.1:4000/ in your browser.
+
+
+SILENT / UNATTENDED INSTALL
+---------------------------
+
+   msiexec /i CloudCourier-<version>.msi /qn
+
+/qn = no UI; /qb = progress bar only. Silent installs never open a browser.
+
+Set any of these properties on the command line:
+
+   SERVICE_ACCOUNT    Default LocalSystem. Use "custom" to run as a supplied
+                      account.
+   SERVICE_USER       Account name when SERVICE_ACCOUNT=custom, e.g. .\svcaccount
+   SERVICE_PASSWORD   Password for that account.
+   PORT               Default 4000. TCP port the service listens on.
+   ALLOW_REMOTE       Default 0. "1" binds 0.0.0.0 (reachable from other
+                      computers); "0" binds 127.0.0.1 (local connections only).
+
+Examples:
+
+   LocalSystem, default port:
+      msiexec /i CloudCourier-1.2.3.msi /qn
+
+   Dedicated low-privilege account:
+      msiexec /i CloudCourier-1.2.3.msi /qn SERVICE_ACCOUNT=custom SERVICE_USER=.\svcaccount SERVICE_PASSWORD=YourPassword
+
+   Reachable from other computers on the network:
+      msiexec /i CloudCourier-1.2.3.msi /qn ALLOW_REMOTE=1
+
+   Capture a log of the install for troubleshooting:
+      msiexec /i CloudCourier-1.2.3.msi /qn /l*v install.log
+
+
+AFTER INSTALL
+-------------
+
+- Service status:  Get-Service LabAutomationAndScreening-cloud-courier   (should be Running)
+- App:             http://127.0.0.1:4000/
+- Logs:            C:\ProgramData\LabAutomationandSCreening\CloudCourier\logs\
+
+
+UPGRADE
+-------
+
+Run a newer CloudCourier-<version>.msi. It replaces the installed version in
+place and keeps the data under C:\ProgramData\LabAutomationandSCreening\CloudCourier\.
+
+
+UNINSTALL
+---------
+
+Settings > Apps (or Control Panel > Programs) > Cloud Courier > Uninstall, or:
+
+   msiexec /x CloudCourier-<version>.msi /qn
+
+This stops and removes the service and the program files. The data directory
+(C:\ProgramData\LabAutomationandSCreening\CloudCourier\) is left in place.
+
+
+TROUBLESHOOTING
+---------------
+
+- Service will not start: check C:\ProgramData\LabAutomationandSCreening\CloudCourier\logs\ and
+  the Windows Event Log (Application).
+
+- Custom account install fails to start the service: confirm the account
+  name/password and that it was granted "Log on as a service".
+
+- Port 4000 already in use: reinstall with a different PORT.

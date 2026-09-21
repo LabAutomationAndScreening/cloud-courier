@@ -18,34 +18,33 @@ repos:
   # package management
   - repo: local
     hooks:
-      - id: uv-check
-        name: check pyproject.toml for valid uv config
-        entry: bash -c 'uv lock --check'
-        language: system
-        pass_filenames: false
-        verbose: true
-        files: "^pyproject.toml$|^uv.lock$"
+    - id: uv-check-backend
+      name: check backend pyproject.toml for valid uv config
+      entry: bash -c 'uv lock --check --directory=./backend'
+      language: system
+      pass_filenames: false
+      verbose: true
+      files: '^backend/pyproject.toml$|^backend/uv.lock$'
 
-      - id: sync-dependencies-on-commit
-        name: ensure python dependencies are up to date during commits
-        stages:
-          [pre-commit]
-          # When the install does change things, it exits 0, so needed to check for the phrase 'operations' in stdout in order to cause things pre-commit command to fail
-        entry: python -c "import subprocess,sys; results=subprocess.run(['uv', 'sync', '--frozen'],timeout=360,capture_output=True); print ('stdout- ' + results.stdout.decode('utf-8', 'strict')); print ('stderr- ' + results.stderr.decode('utf-8', 'strict')); sys.exit(int(results.returncode or int('Installed' in results.stdout.decode('utf-8', 'strict'))));"
-        # don't pass filenames else the command line sees them twice
-        pass_filenames: false
-        language: system
-        files: "uv.lock$"
-        verbose: true
+    - id: sync-dependencies-on-commit-backend
+      name: ensure backend python dependencies are up to date during commits
+      stages: [pre-commit]
+       # When the install does change things, it exits 0, so needed to check for the phrase 'operations' in stdout in order to cause things pre-commit command to fail
+      entry: python -c "import subprocess,sys; results=subprocess.run(['uv', 'sync', '--frozen', '--directory=./backend'],timeout=360,capture_output=True); print ('stdout- ' + results.stdout.decode('utf-8', 'strict')); print ('stderr- ' + results.stderr.decode('utf-8', 'strict')); sys.exit(int(results.returncode or int('Installed' in results.stdout.decode('utf-8', 'strict'))));"
+      # don't pass filenames else the command line sees them twice
+      pass_filenames: false
+      language: system
+      files: 'backend/uv.lock$'
+      verbose: true
 
-      - id: sync-dependencies-post-checkout
-        name: ensure python dependencies are up to date during checkouts
-        stages: [post-checkout]
-        entry: bash -c 'uv sync --frozen'
-        pass_filenames: false
-        language: system
-        always_run: true
-        verbose: true
+    - id: sync-dependencies-post-checkout-backend
+      name: ensure backend python dependencies are up to date during checkouts
+      stages: [post-checkout]
+      entry: bash -c 'uv sync --frozen --directory=./backend'
+      pass_filenames: false
+      language: system
+      always_run: true
+      verbose: true
 
   # Reformatting (should generally come before any file format or other checks, because reformatting can change things)
   - repo: https://github.com/crate-ci/typos
@@ -71,7 +70,8 @@ repos:
           )$
       - id: end-of-file-fixer
         # the XML formatter hook doesn't leave a blank line at the end, so excluding XML files from this hook to avoid conflicts
-        exclude: | # the extra trailing newline in the pull request template makes it easier to click there in the github console. The CLI that programmatically generates devcontainer-lock.json always ends the file incompatible with this hook.
+        # the extra trailing newline in the pull request template makes it easier to click there in the github console. The CLI that programmatically generates devcontainer-lock.json always ends the file incompatible with this hook.
+        exclude: |
           (?x)^(
               \.github/pull_request_template.md|
               template/\.github/pull_request_template.md|
@@ -95,7 +95,6 @@ repos:
               .*generated/graphql.ts|
               .*/generated/open[-_]api/.*|
               .*/schema.graphql|
-              .*pyrightconfig\.json|
           )$
 
   - repo: https://github.com/rbubley/mirrors-prettier
@@ -122,7 +121,6 @@ repos:
               .*/schema.graphql|
               .*/generated/open[-_]api/.*|
               .*generated/graphql.ts|
-              template/.*|
           )$
         files: (.*.json)|(.*.ts)|(.*.jsx)|(.*.tsx)|(.*.yaml)|(.*.yml)|(.*.md)|(.*.html)|(.*.css)|(.*.scss)|(.*.less)|(.*.vue)|(.*.graphql)|(.*.gql)
 
@@ -144,7 +142,7 @@ repos:
     hooks:
       - id: check-added-large-files
         args: ["--maxkb=123"]
-        exclude: (uv.lock)|(pnpm-lock.yaml)
+        exclude: (uv.lock)|(pnpm-lock.yaml)|(frontend/public/favicon.ico)|(backend/src/static/favicon.ico)|(static.*graphiql.*react-dom.production.min.js)
       - id: check-json
         # exclude JSON5 or JSONC files with comments
         exclude: |
@@ -152,7 +150,6 @@ repos:
               .devcontainer/devcontainer.json|
               .devcontainer/devcontainer-lock.json|
               .*devcontainer.json|
-              .*pyrightconfig\.json|
               .*tsconfig.json|
           )$
       - id: check-yaml
@@ -177,9 +174,9 @@ repos:
       - id: check-github-workflows
       - id: check-jsonschema
         name: check taskfiles
-        # Task itself silently ignores unknown keys, so a typo'd key is only caught by the schema.
+        # Task itself silently ignores unknown keys, so a typo'd key is only caught by the schema
         args: [--schemafile, 'https://taskfile.dev/schema.json']
-        files: ^(Taskfile\.yaml|(template/)?\.config/taskfiles/[^/{]+\.yaml)$
+        files: ^(Taskfile\.yaml|\.config/taskfiles/[^/]+\.yaml)$
 
   - repo: https://github.com/maresb/check-json5
     rev: bd4737432a2175617a9eeaa510ab369cbc1cbd3d  # frozen: v1.0.1
@@ -207,12 +204,61 @@ repos:
     hooks:
       - id: detect-private-key
 
-  # - repo: https://github.com/woodruffw/zizmor-pre-commit # TODO: implement this: https://github.com/LabAutomationAndScreening/copier-base-template/issues/95
-  #   rev: b933184438555436e38621f46ceb0c417cbed400  # frozen: v1.13.0
-  #   hooks:
-  #     - id: zizmor
+#  - repo: https://github.com/woodruffw/zizmor-pre-commit
+#    rev: b933184438555436e38621f46ceb0c417cbed400  # frozen: v1.13.0
+#    hooks:
+#      - id: zizmor
+
+  - repo: local
+    hooks:
+      - id: vacuum-openapi
+        name: vacuum OpenAPI schema lint
+        # Lints the generated OpenAPI snapshot against the curated ruleset.
+        # `language: node` with additional_dependencies lets pre-commit install vacuum in an
+        # isolated env, so this runs in CI without any global/devcontainer install. Fails on warn-or-worse.
+        entry: vacuum lint --no-banner --no-style --fail-severity warn --min-score 100 -d --no-message --no-clip -f .config/vacuum-functions -r .config/vacuum-ruleset.yaml --ignore-file .config/vacuum-ignore.yaml backend/tests/unit/__snapshots__/test_basic_server_functionality/test_openapi_schema.json
+        language: node
+        additional_dependencies: ['@quobix/vacuum@0.30.0']
+        files: |
+          (?x)^(
+              backend/tests/unit/__snapshots__/test_basic_server_functionality/test_openapi_schema\.json|
+              .config/vacuum-ruleset\.yaml|
+              .config/vacuum-ignore\.yaml|
+              .config/vacuum-functions/.*\.js
+          )$
+        pass_filenames: false
+        require_serial: true
+        verbose: true
 
   # Linting
+
+  - repo: local
+    hooks:
+      - id: typescript-check
+        name: typescript-check
+        entry: bash -c "pnpm --dir frontend type-check"
+        files: '.+\.ts$|.+\.vue$'
+        # don't pass filenames else the command line sees them twice
+        pass_filenames: false
+        language: system
+        # use require_serial so that script is only called once per commit
+        require_serial: true
+        # print the number of files as a sanity-check
+        verbose: true
+
+  - repo: local
+    hooks:
+      - id: eslint
+        name: eslint
+        entry: bash -c "pnpm --dir frontend lint"
+        files: '.+\.ts$|.+\.vue$|.+\.js$'
+        # don't pass filenames else the command line sees them twice
+        pass_filenames: false
+        language: system
+        # use require_serial so that script is only called once per commit
+        require_serial: true
+        # print the number of files as a sanity-check
+        verbose: true
 
   - repo: https://github.com/Lucas-C/pre-commit-hooks-markup
     rev: 501f3d60cee13c712492103343bc23efdc7b3d1f #v1.0.1
@@ -243,7 +289,6 @@ repos:
           (?x)^(
               .*/generated/graphql/.*|
               .*/generated/open[-_]api/.*|
-              template/.*|
           )$
       - id: ruff
         name: ruff-non-src # tests, scripts and other non-source code
@@ -253,7 +298,6 @@ repos:
           (?x)^(
               .*/generated/graphql/.*|
               .*/generated/open[-_]api/.*|
-              template/.*|
           )$
       - id: ruff-format
         args: [--config=./.config/ruff.toml]
@@ -270,13 +314,11 @@ repos:
         name: pylint
         # exclude any generated code
         # flagging duplicate code for __all__ lists is a false positive
-        # exclude the template files---duplication within them will be discovered during CI of that template instantiation
         exclude: |
           (?x)^(
               .*/generated/graphql/.*|
               .*/generated/open[-_]api/.*|
               .*__init__\.py|
-              template/.*|
           )$
         args:
           - --rcfile=./.config/pylintrc.toml
@@ -286,31 +328,12 @@ repos:
     hooks:
       - id: pyrefly
         name: pyrefly
-        entry: bash -c "uv run pyrefly check -c ./.config/pyrefly.toml"
+        entry: bash -c "uv --directory=backend run pyrefly check -c ../.config/pyrefly.toml"
         files: '.+\.py$'
         exclude: |
           (?x)^(
               .*/generated/graphql/.*|
               .*/generated/open[-_]api/.*|
-          )$
-        # don't pass filenames else the command line sees them twice
-        pass_filenames: false
-        language: system
-        types: [python]
-        # use require_serial so that script is only called once per commit
-        require_serial: true
-        # print the number of files as a sanity-check
-        verbose: true
-
-  - repo: local
-    hooks:
-      - id: pyright-on-tests
-        name: Run pyright on tests of the library # to mimic a downstream consumer of the library who uses pyright as their type checker, see https://pyrefly.org/blog/too-many-type-checkers/
-        entry: bash -c "uv run pyright"
-        files: '(.+\.py|pyproject\.toml|pyrightconfig\.json)$'
-        exclude: |
-          (?x)^(
-              .*/generated/.*|
           )$
         # don't pass filenames else the command line sees them twice
         pass_filenames: false
@@ -328,13 +351,12 @@ repos:
         # Keep Claude's settings.json synced with the JSON5 files. It's only for local development, so don't run it in CI
         name: merge Claude settings
         entry: bash -c '[[ "${GITHUB_ACTIONS:-}" == "true" || "${CI:-}" == "true" ]] && exit 0; bash .claude/helpers/merge-claude-settings.sh'
-        files: ^\.claude/settings/.*\.(json|jsonc)$
+        files: .claude/settings/.*\.(json|jsonc)$
         pass_filenames: false
         language: system
 
       - id: task-list
-        # Schema validation cannot see across files: only Task itself resolves the include paths in the root shim and
-        # rejects a task name defined by two flattened includes. Listing is enough to trigger both errors.
+        # Schema validation cannot see across files: only Task itself resolves the include paths in the root shim and rejects a task name defined by two flattened includes
         name: validate taskfile includes and task names
         entry: bash -c "task --list-all > /dev/null"
         files: ^(Taskfile\.yaml|\.config/taskfiles/.*)$

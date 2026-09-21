@@ -1,0 +1,24 @@
+# ============== WARNING ==============================================================================
+# File is managed by copier template: gh:LabAutomationAndScreening/copier-nuxt-python-intranet-app.git
+# See .config/.copier-managed-files.json for details.
+#
+# You are welcome to make changes to this file in your repo if they are custom to your project,
+# but if the change should be shared with other projects, please backport it to the template repo.
+# =====================================================================================================
+version: '3'
+
+tasks:
+  dev-frontend:
+    desc: Start the frontend development server on http://localhost:3000
+    cmds:
+      - pnpm --dir=frontend dev
+
+  build-frontend:
+    desc: Generate the production frontend bundle into frontend/.output/public
+    cmds:
+      - pnpm --dir=frontend generate
+
+  preview-frontend:
+    desc: Locally preview the generated production frontend bundle
+    cmds:
+      - pnpm --dir=frontend preview

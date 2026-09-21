@@ -17,13 +17,18 @@ RUN apt-get update -y && apt-get install -y \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 
-# Create the venv folder and set permissions for anyone to modify---this is necessary to be able to break out the venv folder as a separate docker volume for better performance on Windows hosts
+# Create the workspace folders that have docker volume (see docker-compose.yaml) and set permissions for anyone to modify
+# this is necessary to be able to break out these folders as a separate docker volume for better performance on Windows hosts
 ARG REPO_NAME=copier-base-template
-ENV VENV_PATH=/workspaces/${REPO_NAME}/.venv
+ENV VENV_PATH=/workspaces/${REPO_NAME}/backend/.venv
+ENV PNPM_STORE=/workspaces/${REPO_NAME}/.pnpm-store
+ENV FRONTEND_NODE_MODULES=/workspaces/${REPO_NAME}/node_modules
 RUN mkdir -p /workspaces && \
     mkdir -p ${VENV_PATH} && \
-    chmod -R 777 /workspaces ${VENV_PATH} && \
-    chgrp -R 0 /workspaces ${VENV_PATH}
+    mkdir -p ${PNPM_STORE} && \
+    mkdir -p ${FRONTEND_NODE_MODULES} && \
+    chmod -R 777 /workspaces ${VENV_PATH} ${PNPM_STORE} ${FRONTEND_NODE_MODULES} && \
+    chgrp -R 0 /workspaces ${VENV_PATH} ${PNPM_STORE} ${FRONTEND_NODE_MODULES}
 
 # SSH
 EXPOSE 2222

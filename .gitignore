@@ -109,6 +109,9 @@ node_modules/
 # Nuxt generate creates a symlink to the dist folder, which can't have trailing slash
 dist
 
+# vacuum OpenAPI lint reports (generated ad-hoc; the linter runs against the committed snapshot)
+vacuum-report-*.json
+
 
 # Infrastructure as Code
 .terraform/

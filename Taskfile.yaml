@@ -14,3 +14,15 @@ includes:
   copier:
     taskfile: ./.config/taskfiles/copier-template.yaml
     flatten: true
+  frontend:
+    taskfile: ./.config/taskfiles/frontend.yaml
+    flatten: true
+  backend:
+    taskfile: ./.config/taskfiles/backend.yaml
+    flatten: true
+  codegen:
+    taskfile: ./.config/taskfiles/codegen.yaml
+    flatten: true
+  stack:
+    taskfile: ./.config/taskfiles/executable-stack.yaml
+    flatten: true

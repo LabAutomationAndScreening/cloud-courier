@@ -1,0 +1,41 @@
+{
+    "folders": [
+        {
+            "name": "root",
+            "path": "."
+        },
+        {
+            "name": "frontend",
+            "path": "frontend"
+        },
+        {
+            "name": "backend",
+            "path": "backend"
+        },
+    ],
+    "settings": {
+        // Shows the workspace name in the status bar
+        "workbench.editor.labelFormat": "medium",
+
+        // Frontend (Nuxt / Vue)
+        // Ensures language server uses the project's TypeScript rather than VS Code's bundled version,
+        // which is required for Nuxt's auto-generated .nuxt/tsconfig.json types to resolve
+        "js/ts.tsdk.path": "${workspaceFolder:frontend}/node_modules/typescript/lib",
+        // Vitest Explorer needs an explicit pointer in a multi-root workspace
+        "vitest.rootConfig": "${workspaceFolder:frontend}/vitest.config.ts",
+
+        // Backend (Python / uv)
+        // Sets the default interpreter to the virtual environment managed by uv
+        "python.defaultInterpreterPath": "${workspaceFolder:backend}/.venv/bin/python",
+        // Works for both devcontainer and non-devcontainer users (devcontainer.json hardcodes
+        // an absolute /workspaces/ path that breaks outside the container)
+        "ruff.configuration": "${workspaceFolder:root}/.config/ruff-non-src.toml",
+
+        "files.exclude": {
+            // Excluding service dirs since they are imported as their own workspace folders
+            "frontend": true,
+            "backend": true
+
+        }
+    }
+}

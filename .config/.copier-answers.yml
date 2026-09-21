@@ -1,27 +1,41 @@
 # Changes here will be overwritten by Copier
-_commit: v0.0.76
-_src_path: gh:LabAutomationAndScreening/copier-python-package-template
+_commit: v0.0.188
+_src_path: gh:LabAutomationAndScreening/copier-nuxt-python-intranet-app.git
+auth_to_ecr_for_e2e_in_ci: false
+backend_deployed_port_number: 4000
+backend_makes_api_calls: false
+backend_rest_api_description: Agent to upload files to cloud
+backend_uses_graphql: false
 configure_python_asyncio: false
 configure_vcrpy: false
-create_docs: true
 deploy_as_executable: true
 description: Agent to upload files to cloud
-full_repo_url: https://github.com/LabAutomationAndScreening/cloud-courier
+extra_windows_service_rights: []
+frontend_uses_graphql: false
+frontend_uses_zod: false
+has_backend: true
+human_friendly_app_name: Cloud Courier
+install_as_windows_service: true
 install_aws_ssm_port_forwarding_plugin: false
 install_claude_cli: true
+installer_branding_dir: frontend/public
+installer_manufacturer: Lab Automation and SCreening
+installer_upgrade_code: 65bd762e-bd98-4ead-ae8f-2eeee6f1d754
+is_circuit_python_driver: false
 is_open_source: true
-package_name: cloud-courier
-primary_author: Eli Fine
+node_version: 24.11.1
+pnpm_minimum_release_age_exclude: ''
 pull_from_ecr: false
-python_ci_versions:
-- 3.13.9
 python_package_registry: PyPI
 python_version: 3.13.9
 repo_name: cloud-courier
 repo_names_for_codespaces_read_permissions: ''
 repo_org_name: LabAutomationAndScreening
-ssh_port_number: 61335
-use_codecov: true
-use_windows_in_ci: false
-use_windows_in_exe_ci: true
+run_backend_e2e_in_ci: false
+sign_installer: false
+ssh_port_number: 51779
+use_upx_for_executable: false
+use_windows_in_ci: true
+windows_service_bind_policy: configurable_loopback_default
+windows_service_org_prefix: LabAutomationAndScreening-
 

@@ -55,8 +55,8 @@ def main() -> None:
 
     if args.push_tag_to_remote:
         ensure_tag_not_present(tag, args.remote)
-        _ = subprocess.run(["git", "tag", tag], check=True)  # noqa: S603,S607 # this is trusted input, it's our own version string. and if `git` isn't in PATH, then there are larger problems anyway
-        _ = subprocess.run(["git", "push", args.remote, tag], check=True)  # noqa: S603,S607 # this is trusted input, it's our own version string. and if `git` isn't in PATH, then there are larger problems anyway
+        _ = subprocess.run(["git", "tag", tag], check=True)  # noqa: S603,S607 # this is trusted input, it's our own pyproject.toml file. and if `git` isn't in PATH, then there are larger problems anyway
+        _ = subprocess.run(["git", "push", args.remote, tag], check=True)  # noqa: S603,S607 # this is trusted input, it's our own pyproject.toml file. and if `git` isn't in PATH, then there are larger problems anyway
         return
 
     if args.confirm_tag_not_present:

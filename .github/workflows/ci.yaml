@@ -44,10 +44,6 @@ jobs:
       - id: check
         uses: ./.github/actions/check-skip-duplicates
 
-  confirm-on-tagged-copier-template:
-    if: ${{ github.event_name == 'pull_request' || github.event_name == 'merge_group' }}
-    uses: ./.github/workflows/confirm-on-tagged-copier-template.yaml
-
   lint:
     needs:
       - get-values
@@ -60,76 +56,47 @@ jobs:
       id-token: write # needed to assume OIDC roles (e.g. for downloading from CodeArtifact)
     with:
       python-version: 3.13.9
+      setup-node: true
+      node-version: 24.11.1
 
-  test:
+  unit-test-frontend:
+    name: Unit Test Frontend
+    timeout-minutes: 8
+    runs-on: ubuntu-24.04
     needs:
       - lint
       - check-skip-duplicate
     if: needs.check-skip-duplicate.outputs.should-run == 'true'
-    strategy:
-      matrix:
-        os:
-          - "ubuntu-24.04"
-
-        python-version:
-
-          - 3.13.9
-
-        include:
-          - os: "ubuntu-24.04"
-            python-version: "3.13.9"
-            JOB_MATCHING_DEV_ENV: true
-
-    runs-on: ${{ matrix.os }}
-    timeout-minutes: 8
-    env:
-      UV_PYTHON: ${{ matrix.python-version }}
-    services:
-      localstack:
-        image: localstack/localstack:4.14.0
-        ports:
-          - 4566:4566
-        env:
-          AWS_ACCESS_KEY_ID: test
-          AWS_SECRET_ACCESS_KEY: test
-          SERVICES: s3,sts,cloudwatch,ssm,events,iam
     steps:
       - name: Checkout code
         uses: actions/checkout@v7.0.1
 
-      - name: Install python tooling
+      - name: Install latest versions of packages
         uses: ./.github/actions/install_deps
+        env:
+          SKIP_PLAYWRIGHT_INSTALL: "1"
         with:
+          node-version: 24.11.1
           skip-installing-ssm-plugin-manager: true
-          skip-installing-pulumi-cli: true
-          python-version: ${{ matrix.python-version }}
-
-      - name: Create AWS profile
-        run: |
-          sh .devcontainer/create-aws-profile.sh
-          cat ~/.aws/config
 
       - name: Unit test
-        run: uv run pytest tests/unit --cov-report=xml --durations=5
+        run: pnpm --dir=frontend test-unit
 
-      - name: Upload coverage to Codecov
-        # only upload coverage from fastest job
-        if: ${{ matrix.JOB_MATCHING_DEV_ENV && github.actor != 'dependabot[bot]' }} # dependabot by default doesn't have access to the necessary secret...and dependabot should never be changing coverage anyway so it's fine not uploading it
-        uses: codecov/codecov-action@v7.1.0
+      - name: Upload test coverage on failure
+        if: ${{ failure() }}
+        uses: actions/upload-artifact@v7.0.1
         with:
-          files: ./coverage.xml
-          flags: unittests
-          env_vars: OS,PYTHON
-          name: codecov-umbrella
-          fail_ci_if_error: true
-          token: ${{ secrets.CODECOV_TOKEN }}
-          slug: LabAutomationAndScreening/cloud-courier
+          name: frontend-test-coverage
+          path: frontend/.coverage
+          if-no-files-found: error
+          include-hidden-files: true
+          retention-days: 5
 
-
-
-  executable:
+  unit-test-backend:
+    name: Unit Test Backend
+    timeout-minutes: 8
     needs:
-      - test
+      - lint
       - check-skip-duplicate
     if: needs.check-skip-duplicate.outputs.should-run == 'true'
     strategy:
@@ -137,68 +104,253 @@ jobs:
         os:
           - "ubuntu-24.04"
           - windows-2025-vs2026
-        python-version:
-
-          - 3.13.9
-
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 8
-    env:
-      UV_PYTHON: ${{ matrix.python-version }}
-
     steps:
       - name: Checkout code
         uses: actions/checkout@v7.0.1
-      - name: Install python tooling
+
+      - name: Install latest versions of python packages
         uses: ./.github/actions/install_deps
         with:
+          python-version: 3.13.9
           skip-installing-ssm-plugin-manager: true
-          skip-installing-pulumi-cli: true
-          python-version: ${{ matrix.python-version }}
 
-      - name: Build executable
-        run: uv run pyinstaller pyinstaller.spec --log-level=DEBUG
-      - name: Upload executable artifact
+      - name: Unit test
+        run: uv --directory=backend run pytest tests/unit --durations=5
+
+      - name: Upload test coverage on failure
+        if: ${{ failure() }}
         uses: actions/upload-artifact@v7.0.1
         with:
-          name: exe-${{ matrix.os }}-${{ matrix.python-version }}
-          path: dist/
+          name: backend-test-coverage-${{ matrix.os }}
+          path: backend/coverage-report-pytest
           if-no-files-found: error
+          retention-days: 5
 
-
-
-  build-docs:
+  build-frontend:
     needs:
       - lint
+      - unit-test-frontend
+      - unit-test-backend
+      - check-skip-duplicate
+    if: needs.check-skip-duplicate.outputs.should-run == 'true'
+
+    timeout-minutes: 8
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v7.0.1
+
+      - name: Install latest versions of node packages
+        uses: ./.github/actions/install_deps
+        env:
+          SKIP_PLAYWRIGHT_INSTALL: "1"
+        with:
+          node-version: 24.11.1
+          skip-installing-ssm-plugin-manager: true
+
+      - name: Build frontend
+        run: task build-frontend
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v7.0.1
+        with:
+          name: frontend-static-assets
+          path: frontend/.output/public/**/*
+          if-no-files-found: error
+          retention-days: 5
+
+
+
+
+  build-backend:
+    needs:
+      - lint
+      - unit-test-frontend
+      - unit-test-backend
+      - build-frontend
       - check-skip-duplicate
     if: needs.check-skip-duplicate.outputs.should-run == 'true'
     strategy:
       matrix:
-        python-version:
-
-          - 3.13.9
-
-
-    runs-on: ubuntu-24.04
+        os:
+          - "ubuntu-24.04"
+          - windows-2025-vs2026
     timeout-minutes: 8
-    env:
-      UV_PYTHON: ${{ matrix.python-version }}
+    runs-on: ${{ matrix.os }}
 
     steps:
       - name: Checkout code
         uses: actions/checkout@v7.0.1
+      - name: Download Frontend Static Assets
+        uses: actions/download-artifact@v8.0.1
+        with:
+          name: frontend-static-assets
+          path: backend/src/static
 
-      - name: Install python tooling
+      - name: Install latest versions of python packages
         uses: ./.github/actions/install_deps
         with:
+          python-version: 3.13.9
           skip-installing-ssm-plugin-manager: true
-          skip-installing-pulumi-cli: true
-          python-version: ${{ matrix.python-version }}
 
-      - name: Build docs
-        working-directory: ./docs
-        run: uv run make html SPHINXOPTS="-W"
+      - name: Build application
+        run: task bundle-executable-from-staged-static
+      - name: Tar files to preserve permissions on Linux during artifact upload # https://github.com/actions/upload-artifact?tab=readme-ov-file#permission-loss
+        run: tar -cvf app.tar backend/dist/cloud-courier
+      - name: Upload application artifact (Windows)
+        if: runner.os == 'Windows'
+        uses: actions/upload-artifact@v7.0.1
+        with:
+          name: built-cloud-courier-${{ matrix.os }}
+          path: backend/dist/cloud-courier/**/*
+          if-no-files-found: error
+          retention-days: 5
+      - name: Upload application artifact (Linux)
+        if: runner.os == 'Linux'
+        uses: actions/upload-artifact@v7.0.1
+        with:
+          name: built-cloud-courier-${{ matrix.os }}
+          path: app.tar
+          if-no-files-found: error
+          retention-days: 5
 
+
+  test-compiled-frontend-dev:
+    name: Test the compiled Frontend for pnpm dev mode
+    timeout-minutes: 8
+    runs-on: ubuntu-24.04
+    needs:
+      - build-frontend
+      - build-backend
+      - check-skip-duplicate
+    if: needs.check-skip-duplicate.outputs.should-run == 'true'
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v7.0.1
+
+      - name: Install latest versions of node packages
+        uses: ./.github/actions/install_deps
+        with:
+          node-version: 24.11.1
+          skip-installing-ssm-plugin-manager: true
+
+      - name: Test
+        run: pnpm --dir=frontend test-compiled-dev
+
+  e2e-test-windows-service:
+    name: Windows Service Smoke Tests
+    timeout-minutes: 15
+    runs-on: windows-2025-vs2026
+    needs:
+      - build-backend
+      - check-skip-duplicate
+    if: needs.check-skip-duplicate.outputs.should-run == 'true'
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v7.0.1
+
+      - name: Install latest versions of python packages
+        uses: ./.github/actions/install_deps
+        with:
+          python-version: 3.13.9
+          skip-installing-ssm-plugin-manager: true
+
+      - name: Download Built executable
+        uses: actions/download-artifact@v8.0.1
+        with:
+          name: built-cloud-courier-windows-2025-vs2026
+          path: backend/dist/cloud-courier
+
+      - name: Windows service smoke tests
+        run: uv --directory=backend run pytest tests/windows_service --durations=5 --basetemp=dist/pytest-tmp
+
+      - name: Dump service crash logs on failure
+        if: ${{ failure() }}
+        shell: pwsh
+        run: |
+          $dumps = Get-ChildItem -Path "backend/dist/pytest-tmp" -Recurse -Filter "service-crash.log" -ErrorAction SilentlyContinue
+          if ($dumps.Count -eq 0) {
+            Write-Host "No service-crash.log files found under backend/dist/pytest-tmp"
+          } else {
+            foreach ($dump in $dumps) {
+              Write-Host "=== $($dump.FullName) ==="
+              Get-Content $dump.FullName
+            }
+          }
+
+      - name: Upload service logs on failure
+        if: ${{ failure() }}
+        uses: actions/upload-artifact@v7.0.1
+        with:
+          name: windows-service-logs
+          path: backend/dist/pytest-tmp/**/service-logs/**
+          if-no-files-found: warn
+          retention-days: 5
+
+  build-installer:
+    needs:
+      - build-backend
+      - check-skip-duplicate
+    if: needs.check-skip-duplicate.outputs.should-run == 'true'
+    permissions:
+      contents: read
+      actions: read # build-installer.yaml downloads the built bundle artifact
+    # Intentionally no `secrets: inherit` here (unlike the release job, which passes it when
+    # signing is enabled): CI builds an unsigned MSI as a build-breakage check; release signs it.
+    uses: ./.github/workflows/build-installer.yaml
+
+
+  e2e-test:
+    name: End-to-end Testing
+    timeout-minutes: 45
+    strategy:
+      matrix:
+        os:
+          - "ubuntu-24.04"
+          - windows-2025-vs2026
+    runs-on: ${{ matrix.os }}
+    needs:
+      - build-frontend
+      - build-backend
+      - check-skip-duplicate
+    if: needs.check-skip-duplicate.outputs.should-run == 'true'
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v7.0.1
+
+      - name: Install latest versions of node packages
+        uses: ./.github/actions/install_deps
+        with:
+          node-version: 24.11.1
+      - name: Download Built executable
+        uses: actions/download-artifact@v8.0.1
+        with:
+          name: built-cloud-courier-${{ matrix.os }}
+          path: backend/dist/cloud-courier
+      - name: Untar the artifact (on Linux)
+        if: runner.os == 'Linux'
+        run: tar -xvf backend/dist/cloud-courier/app.tar -C .
+
+      - name: E2E test
+        run: pnpm --dir=frontend test-e2e
+
+      - name: Upload Playwright report on failure
+        if: ${{ failure() }}
+        uses: actions/upload-artifact@v7.0.1
+        with:
+          name: playwright-report-${{ matrix.os }}
+          path: |
+            frontend/playwright-report
+            frontend/test-results
+          if-no-files-found: error
+          retention-days: 5
+
+
+
+  confirm-on-tagged-copier-template:
+    if: ${{ github.event_name == 'pull_request' || github.event_name == 'merge_group' }}
+    uses: ./.github/workflows/confirm-on-tagged-copier-template.yaml
 
   workflow-summary:
     runs-on: ubuntu-24.04
@@ -207,9 +359,14 @@ jobs:
       - get-values
       - check-skip-duplicate
       - lint
-      - test
-      - build-docs
-      - executable
+      - unit-test-frontend
+      - build-frontend
+      - unit-test-backend
+      - build-backend
+      - test-compiled-frontend-dev
+      - e2e-test-windows-service
+      - build-installer
+      - e2e-test
       - confirm-on-tagged-copier-template
     permissions:
       statuses: write # needed for updating status on Dependabot PRs

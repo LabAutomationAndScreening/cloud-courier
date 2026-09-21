@@ -18,10 +18,12 @@ project-excludes = [
 ]
 # without this explicit "project-includes" and "search-path", pyrefly struggles to understand the tests folder
 project-includes = [
-                    "../src",
-                    "../tests"
+                    "../backend/src",
+                    "../backend/tests"
                   ]
-search-path = [".."]
+# "../backend" is needed so the tests package (rooted at backend/) resolves relative imports;
+# without it pyrefly infers the import root from this config's dir (.config/) and can't name the test modules
+search-path = ["../backend/src", "../backend"]
 disable-project-excludes-heuristics = true # with this being enabled by default, pyrefly thinks the src is excluded because it's an editable local install
 python-platform = "linux"
 infer-with-first-use = false # more similar to pyright. must define the empty list type when instantiated
@@ -33,7 +35,11 @@ ignore-errors-in-generated-code = true # not sure yet how effective this is
 no-access = "ignore" # (already covered by ruff SLF001)
 untyped-import = "ignore" # equivalent of reportMissingTypeStubs=false in pyright
 unannotated-return = "ignore" # ruff ANN2xx already requires this, but with suppress-none-returning so that None-returning functions don't need the noise. pyrefly has no equivalent option---the error kind is all-or-nothing.
-implicit-reexport = "ignore" # TODO: convert cloud-courier into the nuxt-app template anyway, which has this by default....cloud courier is not a "library"
+# The check keeps a distributed library's public API deliberate: consumers should only reach symbols the
+# package explicitly re-exports via __all__ or a redundant alias. This project is an application — nothing
+# imports backend_api from outside the repo, and its only real API surface is the HTTP interface — so every
+# importer is in-repo and the __all__ bookkeeping buys nothing.
+implicit-reexport = "ignore"
 
 [[sub-config]]
 matches = "../**/tests/**"
@@ -46,3 +52,11 @@ implicitly-defined-attribute = "ignore" # doesn't make any sense for test cases.
 # and `call_args[0]` is untyped by construction --- so enforcing here only buys narrowing ceremony at every spy.
 unknown-variable-type = "ignore"
 unknown-argument-type = "ignore"
+
+# TODO: move this into win_service.py as a file-level per-code directive once pyrefly supports it.
+# Tracking: https://github.com/facebook/pyrefly/issues/3723
+[[sub-config]]
+matches = "../**/entrypoint/win_service.py"
+
+[sub-config.errors]
+unused-ignore = "ignore"
