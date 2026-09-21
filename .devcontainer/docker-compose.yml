@@ -26,20 +26,22 @@ services:
       - AWS_DEFAULT_REGION=us-east-1
       - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
       - BEADS_DIR=/workspaces/cloud-courier/.claude/.beads
+      - BEADS_DOLT_SERVER_MODE=1 # bd >=1.0 defaults to embedded dolt, and bd init hard-fails when the server host/port are set without this
       - BEADS_DOLT_SERVER_HOST=beads-dolt # this is on the docker compose network. We don't want to publish the server port because then the local machine would have a bunch of conflicts with multiple devcontainers running
       - BEADS_DOLT_SERVER_PORT=3306
       - BEADS_DOLT_SERVER_DATABASE=beads_work
-      - BEADS_DOLT_SERVER=beads-dolt # for some weird reason, unless we specify both of these envvars it doesn't seem to reliably work
-      - BEADS_DOLT_PORT=3306
+      - BEADS_DOLT_AUTO_START=0 # the beads-dolt service owns the server lifecycle, so bd must never spawn its own
+      - BD_DISABLE_METRICS=1 # bd >=1.0 sends anonymous usage metrics by default
 
 
   beads-dolt:
-    image: dolthub/dolt-sql-server:1.83.0 # no explicit reason for this version, just pinning for best practice
+    image: dolthub/dolt-sql-server:2.1.0 # kept in lockstep with beads_version; both are defined in extensions/context.py
     volumes:
       - beads_dolt_data:/var/lib/dolt
     environment:
       - DOLT_ROOT_HOST=%
       - DOLT_DATABASE=beads_work
+      - DOLT_DISABLE_EVENT_FLUSH=1 # dolt contacts doltremoteapi.dolthub.com with usage metrics by default, even with no remotes configured (see beads SECURITY.md)
 
   localstack:
     image: localstack/localstack:4.14.0 # no known reason for not using newer versions, just pinning for best practice

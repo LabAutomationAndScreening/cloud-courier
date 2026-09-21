@@ -78,6 +78,9 @@ This project is a Python library.
 ## Tooling
 
 - ❌ Never chain commands (`&&`, `||`, `;`, `&`) — breaks permission allow-list matcher. ✅ One command per tool call. `cd` as separate prior call. Pipes (`|`) OK.
+- Before hand-assembling a multi-step workflow, run `task --list` — it is probably already a task. Definitions live in `.config/taskfiles/`; the root `Taskfile.yaml` only includes them.
+- The bans on `pnpm --prefix`, `uv --directory` and direct tool invocation apply to commands you type, not to task definitions: a task's commands run with the repo root as their working directory by default. Prefer adding or extending a task over typing the long form.
+- Linting and type-checking stay with `pre-commit run <hook-id>` rather than a task, so that what you run is exactly what CI runs.
 - `cd` into a subdirectory is auto-approved; navigating up (`cd ..`) or to an absolute path (`cd /some/path`) requires a user permission prompt. Minimize such navigation: run `pre-commit` from whichever subdirectory you're already in (it walks up to find `.pre-commit-config.yaml`).
 - ❌ Never use `python3` or `python` directly. ✅ Always use `uv run python` for Python commands.
 - ❌ Never use `python3`/`python` for one-off data tasks. ✅ Use `jq` for JSON parsing, standard shell builtins for string manipulation. Only reach for `uv run python` when no dedicated tool covers the need.
@@ -90,18 +93,20 @@ This project is a Python library.
 - Never use backslash line continuations in shell commands — always write the full command on a single line. Backslashes break the permission allow-list matcher.
 - **Never manually edit files in any `generated/` folder.** These files are produced by codegen tooling (typically Kiota) and any manual changes will be overwritten. If a generated file needs to change, update the source (e.g. the OpenAPI schema) and re-run the generator.
 - Leave `import` statement ordering and unused-import removal to pre-commit — don't edit them yourself.
+- In GitHub Codespaces, the injected `GITHUB_TOKEN` is a repo-scoped app token, so `gh`/`git` cannot reach other repos in the org. It lives in the container process environment (not any dotfile), so `unset` inside a Bash tool call does not persist. To grant broader access, ask the user to run `env -u GITHUB_TOKEN -u GH_TOKEN gh auth login --hostname github.com --git-protocol https --web` in their shell (the `--web` flags are required — `gh auth login` alone needs a TTY that the Bash tool does not provide, and it refuses to store credentials while `GITHUB_TOKEN` is set). Afterwards, prefix your own `gh`/`git` calls with `env -u GITHUB_TOKEN -u GH_TOKEN` so they use the stored GitHub CLI credentials instead of the app token — `GH_TOKEN` also has to be cleared because `gh` gives it precedence over both `GITHUB_TOKEN` and stored credentials. Where those credentials live depends on the environment (`gh` prefers the OS credential store and the config dir follows `GH_CONFIG_DIR`), but in these devcontainers they usually land in plain text at `~/.config/gh/hosts.yml`; `gh auth status` reports the active source.
 
 <!-- BEGIN BEADS INTEGRATION -->
-## Issue Tracking with bd (beads)
+## Work Tracking with bd (beads)
 
-**IMPORTANT**: This project uses **bd (beads)** for ALL issue tracking. Do NOT use markdown TODOs, task lists, or other tracking methods.
+**IMPORTANT**: Use **bd (beads)** to break down and track your own work while implementing a ticket. Within a working session it is the only place to track that breakdown — do NOT use markdown TODOs, task lists, or other scratch tracking methods.
+
+bd is not the team's ticket tracker. It is a local tool for a developer and an AI agent working together: `bd init --stealth` adds `.beads/` to `.git/info/exclude`, so neither the database nor its JSONL export is committed, and nothing recorded in bd is visible to reviewers, teammates, or CI. The ticket a session is implementing lives in whatever system the team owning the repository uses — GitHub Issues, Jira, Linear, or something else.
 
 ### Why bd?
 
-- Dependency-aware: Track blockers and relationships between issues
-- Git-friendly: Auto-syncs to JSONL for version control
+- Dependency-aware: Track blockers and relationships between the pieces of work in a session
 - Agent-optimized: JSON output, ready work detection, discovered-from links
-- Prevents duplicate tracking systems and confusion
+- Keeps session breakdown out of the team's ticket tracker, and out of the codebase
 
 ### Quick Start
 
@@ -115,20 +120,20 @@ bd ready --json
 
 ```bash
 bd create "Issue title" --description="Detailed context" -t bug|feature|task -p 0-4 --json
-bd create "Issue title" --description="What this issue is about" -p 1 --deps discovered-from:bd-123 --json
+bd create "Issue title" --description="What this issue is about" -p 1 --deps discovered-from:<parent-id> --json
 ```
 
 **Claim and update:**
 
 ```bash
-bd update bd-42 --status in_progress --json
-bd update bd-42 --priority 1 --json
+bd update <id> --status in_progress --json
+bd update <id> --priority 1 --json
 ```
 
 **Complete work:**
 
 ```bash
-bd close bd-42 --reason "Completed" --json
+bd close <id> --reason "Completed" --json
 ```
 
 **Creating human readable file:**
@@ -145,6 +150,7 @@ bd export -o [relative path to repository root]/.claude/.beads/issues-dump.jsonl
 - `task` - Work item (tests, docs, refactoring)
 - `epic` - Large feature with subtasks
 - `chore` - Maintenance (dependencies, tooling)
+- `decision` - An architectural decision (aliases: `dec`, `adr`)
 
 ### Priorities
 
@@ -166,15 +172,15 @@ bd export -o [relative path to repository root]/.claude/.beads/issues-dump.jsonl
 
 ### Important Rules
 
-- ✅ Use bd for ALL task tracking
+- ✅ Use bd for ALL tracking of your own work within a session
 - ✅ Always use `--json` flag for programmatic use
 - ✅ Link discovered work with `discovered-from` dependencies
 - ✅ Check `bd ready` before asking "what should I work on?"
-- ❌ Do NOT create markdown TODO lists
-- ❌ Do NOT use external issue trackers
-- ❌ Do NOT duplicate tracking systems
+- ❌ Do NOT create markdown TODO lists to track session work
+- ❌ Do NOT stand up a second scratch tracking system alongside bd
+- ❌ Do NOT propose bd for work that needs tracking beyond the session — a bd issue is invisible to everyone else. Suggest a code comment, or a ticket in the team's own tracker, and do not assume which tracker that is
 
-For more details, see README.md and docs/QUICKSTART.md.
+For more details, run `bd quickstart` or see <https://github.com/gastownhall/beads>.
 
 # Copier-Managed Files
 

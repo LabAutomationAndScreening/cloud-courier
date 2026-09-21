@@ -12,6 +12,9 @@
 Documentation is hosted on [ReadTheDocs](https://cloud-courier.readthedocs.io/en/latest/?badge=latest).
 
 # Development
+
+Multi-step workflows are defined as [Task](https://taskfile.dev) tasks. Run `task --list` to see them; the definitions live in `.config/taskfiles/`, and `Taskfile.yaml` in the repo root is only a shim that includes them.
+
 This project has a dev container. If you already have VS Code and Docker installed, you can click the badge above or [here](https://vscode.dev/redirect?url=vscode://ms-vscode-remote.remote-containers/cloneInVolume?url=https://github.com/LabAutomationAndScreening/cloud-courier) to get started. Clicking these links will cause VS Code to automatically install the Dev Containers extension if needed, clone the source code into a container volume, and spin up a dev container for use.
 
 The `Release` workflow reuses the checks from CI instead of re-running them: it requires that the `CI` workflow has already completed successfully for the current commit (including the `workflow-summary` job) and reuses the artifacts CI built rather than rebuilding. Trigger it manually with `workflow_dispatch`; a real release must be run from `main`, while the `dry_run` option lets you exercise the workflow from any branch without tagging or releasing. A real run pushes the `v<version>` git tag and creates a GitHub Release, attaching the executable that CI built for every OS and Python version.
@@ -22,8 +25,7 @@ The `Release` workflow reuses the checks from CI instead of re-running them: it 
 
 
 ## Updating from the template
-This repository uses a copier template. To pull in the latest updates from the template, use the command:
-`copier update --answers-file .config/.copier-answers.yml --trust --conflict rej --defaults`
+This repository uses a copier template. To pull in the latest updates from the template, run `task copier-update`
 
 <!--
 ============== WARNING ==============================================================================

@@ -1,0 +1,16 @@
+# ============== WARNING ==============================================================================
+# File is managed by copier template: gh:LabAutomationAndScreening/copier-base-template.git
+# See .config/.copier-managed-files.json for details.
+#
+# You are welcome to make changes to this file in your repo if they are custom to your project,
+# but if the change should be shared with other projects, please backport it to the template repo.
+# =====================================================================================================
+# Task definitions live in .config/taskfiles/ next to the other tool configs so the repo root stays uncluttered.
+# This shim exists because Task cannot be pointed at a config directory: auto-discovery covers only Taskfile.yml, taskfile.yml, Taskfile.yaml, taskfile.yaml and their .dist variants in the current directory walking up through parents, no environment variable sets the Taskfile path (https://github.com/go-task/task/issues/1721 requested one and was closed as a duplicate on 2025-12-10 with no linked replacement and no implementation), and requiring -t/--taskfile on every call would break both the ergonomics and the Claude Code bash permission matcher.
+# Every include is flattened so that no task name contains a colon: Task's ':' namespace separator is not configurable and Claude Code cannot match a ':*' permission pattern (see .claude/settings/permissions/bash.jsonc). Flattened names share one global namespace, so a collision between two included files is a hard error rather than a silent shadow, and names are prefixed by hand (build-frontend) instead of namespaced (frontend:build).
+version: '3'
+
+includes:
+  copier:
+    taskfile: ./.config/taskfiles/copier-template.yaml
+    flatten: true

@@ -104,11 +104,10 @@
       "Bash(amp *)",
       "Bash(atuin *)",
       "Bash(bc *)",
-      "Bash(chezmoi *)",
       "Bash(diff *)",
       "Bash(jq *)",
-      "Bash(just *)",
       "Bash(lsof *)",
+      "Bash(task *)", // Task runner invocation is freely allowed.  Write access to the taskfiles themselves is protected by Ask.
       "Bash(test *)",
       "Bash(xxd)", // this invocation can be used to read, but not to write (so no " *" after it)
       "Bash(zk *)",
@@ -155,6 +154,17 @@
       "Bash(gh pr ready *)",
       "Bash(gh pr review *)",
       "Bash(gh pr update-branch *)",
+      // Task must run the repo's own taskfiles, which are the reviewed ones. These flags are the only ways to point it elsewhere (there is no environment variable equivalent -- https://github.com/go-task/task/issues/1721 was closed as a duplicate with nothing implemented), and `/tmp` is writable without a prompt, so without these denials `Bash(task *)` would be an allow-anything entry.
+      "Bash(task -t *)",
+      "Bash(task --taskfile *)",
+      "Bash(task --taskfile=*)",
+      "Bash(task --entrypoint *)",
+      "Bash(task --entrypoint=*)",
+      "Bash(task -d *)",
+      "Bash(task --dir *)",
+      "Bash(task --dir=*)",
+      "Bash(task -g *)",
+      "Bash(task --global *)",
 
       // Destructive File Operations
       "Bash(chmod -R *)",

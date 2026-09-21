@@ -1,0 +1,35 @@
+# ============== WARNING ==============================================================================
+# File is managed by copier template: gh:LabAutomationAndScreening/copier-base-template.git
+# See .config/.copier-managed-files.json for details.
+#
+# You are welcome to make changes to this file in your repo if they are custom to your project,
+# but if the change should be shared with other projects, please backport it to the template repo.
+# =====================================================================================================
+version: '3'
+
+tasks:
+  copier-update:
+    desc: Pull the latest updates from the upstream copier template into this repo
+    cmds:
+      - task: _copier-update
+        vars:
+          REF_FLAG: ''
+
+  copier-update-from-ref:
+    desc: Pull updates from a specific ref of the upstream copier template, e.g. `task copier-update-from-ref REF=some-branch`
+    requires:
+      vars: [REF]
+    cmds:
+      - task: _copier-update
+        vars:
+          REF_FLAG: --vcs-ref {{.REF | shellQuote}}
+
+  _copier-update:
+    internal: true
+    cmds:
+      - copier update --answers-file .config/.copier-answers.yml --trust --conflict rej --defaults {{.REF_FLAG}}
+
+  prune-copier-rejects:
+    desc: Delete .rej files whose target file is unchanged, failing if any real conflict is left to resolve
+    cmds:
+      - ./scripts/delete_false_positive_rej.py

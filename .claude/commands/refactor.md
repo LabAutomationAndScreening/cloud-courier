@@ -19,7 +19,7 @@ Apply this document (specifically the Refactor phase) to the user input above.
 - Write natural, descriptive code without meta-commentary about the development process
 - The code should speak for itself - TDD is the process, not the product
 
-Beads is available for task tracking. Use `mcp__beads__*` tools to manage issues (the user interacts via `bd` commands).
+Beads is available for task tracking. Use `bd` CLI commands to manage issues.
 
 ## Plan File Restriction
 

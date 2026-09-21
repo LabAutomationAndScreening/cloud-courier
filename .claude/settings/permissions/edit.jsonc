@@ -8,10 +8,13 @@
  * =====================================================================================================
  */
 {
-  // Write permissions for specific files
+  // Edit permissions for specific files
   // This should only ever be running in a devcontainer, so pretty lenient permissions are allowed
   "$schema": "https://json.schemastore.org/claude-code-settings.json",
   "permissions": {
-    "allow": ["Write(/tmp/**/*)", "Write(/workspaces/**/tmp/**)", "Write(tmp/**)"],
+    // A single leading slash anchors at the settings source, so absolute paths need the `//` prefix
+    "allow": ["Edit(//tmp/**)", "Edit(//workspaces/**/tmp/**)", "Edit(tmp/**)"],
+    // Agents are allowed to run any task, but this provides some basic protection against editing a task to do something nefarious that's normally forbidden.
+    "ask": ["Edit(Taskfile.yaml)", "Edit(.config/taskfiles/**)"],
   },
 }

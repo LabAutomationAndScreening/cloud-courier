@@ -9,6 +9,7 @@
  */
 {
     "availableModels": [
+        "fable",
         "sonnet",
         "opus",
         "haiku",

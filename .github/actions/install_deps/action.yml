@@ -16,8 +16,8 @@ inputs:
     description: Node version to install
     required: false # if this is set, then assume you want node dependencies installed
     default: 'notUsing'
-  package-json-file:
-    description: Relative path to a package.json to read the pnpm version from (its `packageManager` or `devEngines.packageManager` field). When unset, the pnpm version pinned by the template is used instead.
+  working-directory:
+    description: Relative path to the directory holding the package.json to read the pnpm version from (its `packageManager` or `devEngines.packageManager` field). When unset, the pnpm version pinned by the template is used instead.
     required: false
     default: 'notUsing'
   install-deps:
@@ -68,43 +68,52 @@ runs:
       with:
         python-version: ${{ env.PYTHON_VERSION }}
 
-    - name: Check for a pnpm lock file # pnpm/setup can only cache the store when there's a lock file at the repo root to key the cache off of
-      id: pnpm-lock-probe
+    - name: Locate the pnpm project # pnpm/setup keys the store cache off a lock file, so it can only cache when one exists in the directory the project lives in
+      id: pnpm-project
       if: ${{ inputs.node-version != 'notUsing' }}
+      env:
+        WORKING_DIRECTORY: ${{ inputs.working-directory }}
       run: |
-        if [ -f pnpm-lock.yaml ]; then
-          echo "exists=true" >> "$GITHUB_OUTPUT"
+        if [ "$WORKING_DIRECTORY" = "notUsing" ]; then
+          project_dir="."
         else
-          echo "exists=false" >> "$GITHUB_OUTPUT"
+          project_dir="$WORKING_DIRECTORY"
+        fi
+        echo "dir=$project_dir" >> "$GITHUB_OUTPUT"
+        if [ -f "$project_dir/pnpm-lock.yaml" ]; then
+          echo "lock_exists=true" >> "$GITHUB_OUTPUT"
+        else
+          echo "lock_exists=false" >> "$GITHUB_OUTPUT"
         fi
       shell: bash
 
     - name: Setup pnpm and node # this action installs both pnpm and the node runtime, so actions/setup-node is not needed
       if: ${{ inputs.node-version != 'notUsing' }}
-      uses: pnpm/setup@v2.0.2
+      uses: pnpm/setup@v2.1.0
       with:
-        # an empty version makes pnpm/setup read it from package-json-file instead. Passing both a version and a package.json with a conflicting `packageManager` field is a hard error in pnpm/setup.
-        version: ${{ inputs.package-json-file == 'notUsing' && '11.22.0' || '' }}
-        package-json-file: ${{ inputs.package-json-file == 'notUsing' && 'package.json' || inputs.package-json-file }}
+        # an empty version makes pnpm/setup read it from the manifest in working-directory instead. Passing both a version and a package.json with a conflicting `packageManager` field is a hard error in pnpm/setup.
+        version: ${{ inputs.working-directory == 'notUsing' && '12.4.2' || '' }}
+        working-directory: ${{ steps.pnpm-project.outputs.dir }}
+        # cache-dependency-path is left at its default, which is the lock file inside working-directory -- the same one the probe above checks
         runtime: node@${{ inputs.node-version }}
-        cache: ${{ steps.pnpm-lock-probe.outputs.exists }}
+        cache: ${{ steps.pnpm-project.outputs.lock_exists }}
         install: false # dependency installation is handled by manual-setup-deps.py, which knows about every environment in the repo
 
     - name: Install tooling
       # the funky syntax is github action ternary
       # --no-node is always passed because the only node tooling this script installs is pnpm, which pnpm/setup above already installed
-      run: python .devcontainer/install-ci-tooling.py ${{ inputs.python-version == 'notUsing' && '--no-python' || '' }} --no-node ${{ inputs.skip-installing-ssm-plugin-manager && '--skip-installing-ssm-plugin' || '' }}
+      run: python .devcontainer/install-ci-tooling.py ${{ inputs.python-version == 'notUsing' && '--no-python' || '' }} --no-node ${{ inputs.skip-installing-ssm-plugin-manager == 'true' && '--skip-installing-ssm-plugin' || '' }}
       shell: pwsh
 
     - name: OIDC Auth for CodeArtifact
       if: ${{ inputs.code-artifact-auth-role-name != 'no-code-artifact' }}
-      uses: aws-actions/configure-aws-credentials@v6.2.3
+      uses: aws-actions/configure-aws-credentials@v6.3.0
       with:
         role-to-assume: arn:aws:iam::${{ inputs.code-artifact-auth-role-account-id }}:role/${{ inputs.code-artifact-auth-role-name }}
         aws-region: ${{ inputs.code-artifact-auth-region }}
 
     - name: Install dependencies
       # the funky syntax is github action ternary
-      if: ${{ inputs.install-deps }}
-      run: python .devcontainer/manual-setup-deps.py ${{ inputs.python-version == 'notUsing' && '--no-python' || '' }} ${{ inputs.node-version == 'notUsing' && '--no-node' || '' }} ${{ inputs.skip-updating-devcontainer-hash && '--skip-updating-devcontainer-hash' || '' }} ${{ inputs.skip-installing-pulumi-cli && '--skip-installing-pulumi-cli' || '' }}
+      if: ${{ inputs.install-deps == 'true' }}
+      run: python .devcontainer/manual-setup-deps.py ${{ inputs.python-version == 'notUsing' && '--no-python' || '' }} ${{ inputs.node-version == 'notUsing' && '--no-node' || '' }} ${{ inputs.skip-updating-devcontainer-hash == 'true' && '--skip-updating-devcontainer-hash' || '' }} ${{ inputs.skip-installing-pulumi-cli == 'true' && '--skip-installing-pulumi-cli' || '' }}
       shell: pwsh

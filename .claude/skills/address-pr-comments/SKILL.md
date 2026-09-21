@@ -2,7 +2,7 @@
 name: address-pr-comments
 description: Addresses PR review comments by making code changes and posting replies. Takes a PR number or auto-detects from current branch. Use when the user wants to address review feedback, respond to PR comments, fix PR feedback, or says "address comments on PR X".
 user-invocable: true
-allowed-tools: Bash, Read, Write, Edit, Grep, Glob, AskUserQuestion
+allowed-tools: Bash, Read, Write, Edit, Grep, Glob, AskUserQuestion, Skill
 adapted-from: https://github.com/josh-gree/my-claude-skills
 ---
 
@@ -190,9 +190,12 @@ Within a single Phase 2 invocation, the order below is strict. The invariants ap
 > **Never commit before the reply body is finalized with the user. Never push before all reply texts in the batch are finalized. Never post a reply before its commit has been pushed. Never skip the commit link in a code-change reply.**
 
 1. For each queued **code change** (in order):
-   - Follow the `/create-issues` process: create a bd issue with a proper title, description (why this change, context from the PR comment), design (technical approach), and Given-When-Then acceptance criteria. Export after creating.
+   - Invoke the `Skill` tool with `skill: "create-issues"`, passing the reviewer's comment and the agreed change as `args`. Follow the process it returns to create a bd issue with a proper title, description (why this change, context from the PR comment), design (technical approach), and Given-When-Then acceptance criteria. Export after creating.
    - Mark the issue in progress
-   - If the change involves code: execute the TDD red/green/refactor cycle (`/red` → `/green` → `/refactor`) against the acceptance criteria. If the change is non-code (docs, markdown, config, scripts, etc.): make the change directly — TDD does not apply, but the remaining steps are identical.
+   - Decide first whether the change is testable code. **If it is not** — documentation, markdown, comments, config, shell scripts where the project has no harness for them, or any other change with no behaviour to assert — make the change directly and move to the next step. Do **not** invoke `red`, `green` or `refactor`, and do not invent a test to justify the change: TDD does not apply here. Everything after this step is identical either way.
+   - **If it is testable code**, work through the TDD cycle by invoking the `Skill` tool once per phase, in this order — `skill: "red"`, then `skill: "green"`, then `skill: "refactor"` — passing the bd issue ID and the acceptance criterion being driven as `args`. Repeat the three-phase cycle until every acceptance criterion is satisfied.
+
+     **Each phase must be a real `Skill` tool call — not a description of one, and not your own recollection of what red/green/refactor mean.** Those skills carry project-specific rules that general TDD practice does not include, and they are re-read fresh each cycle so later cycles do not drift from earlier ones. Writing a test or an implementation without a preceding `Skill` call for that phase is a workflow violation.
    - **Finalize the reply body with the user — before committing.** Draft the reply text (everything except the commit link) — **do NOT include the AI attribution footer; `check-footer.py` appends it**. Write to `<reply_file>`, tell the user the absolute path (per [Conventions](#conventions)), and go through the approve/edit loop with the user until they approve. Do not proceed until the user explicitly confirms the text. Leave a clear `[COMMIT LINK]` placeholder where the link will go.
 
      Use AskUserQuestion with this wording (do NOT say "Post now" — the reply is queued for posting after the push, not posted immediately):
@@ -252,6 +255,8 @@ Summarise what was done:
 - Skip comments without asking
 - Leave uncommitted changes
 - Include the AI attribution footer in generated reply text — `check-footer.py` is solely responsible for it
+- Write tests or implementation from your own knowledge of TDD — when a change is testable code, `red`, `green` and `refactor` must each be invoked through the `Skill` tool
+- Run the TDD cycle on a change that has no behaviour to assert — docs, markdown, comments, config and unharnessed shell scripts are made directly
 
 ## Handling Common Scenarios
 
@@ -273,7 +278,7 @@ Discuss with user, then post a reply explaining the reasoning if they want to pu
 - [ ] If `--resume`: build inventory, classify reply drafts (placeholder vs finalized vs orphan), prompt user for resume strategy
 - [ ] Fetch and display comments
 - [ ] Phase 1: collect decisions for all comments (reply-only comments posted in Phase 1)
-- [ ] Phase 2: implement code changes, one commit per comment
+- [ ] Phase 2: invoke `create-issues` via the `Skill` tool for every queued item; add `red` → `green` → `refactor` only for items that are testable code; one commit per comment
 - [ ] Push all commits in a single push
 - [ ] Post code-change replies with commit links after push
 - [ ] Report what was done

@@ -121,3 +121,6 @@ skip-magic-trailing-comma = false
 
 # Like Black, automatically detect the appropriate line ending.
 line-ending = "auto"
+
+[lint.flake8-tidy-imports.banned-api]
+"__future__.annotations".msg = "__future__.annotations will be deprecated, once 3.13 is EOL. Also see https://peps.python.org/pep-0749/. If this is problematic, turn annotations into strings, or add `# noqa: TID251` selectively but likely this import is not necessary at all."
