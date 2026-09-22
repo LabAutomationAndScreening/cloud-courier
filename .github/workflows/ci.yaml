@@ -102,9 +102,24 @@ jobs:
     strategy:
       matrix:
         os:
+          # Deliberate divergence from the upstream template: no Windows runner here. use_windows_in_ci is
+          # true so that the MSI installer gets built, which also adds Windows to this matrix, but nearly
+          # every backend unit test talks to AWS through the localstack service container below, and GitHub
+          # only runs Linux service containers on Linux runners. Restoring Windows unit-test coverage is
+          # tracked separately; it needs the AWS-touching tests moved off localstack first.
           - "ubuntu-24.04"
-          - windows-2025-vs2026
     runs-on: ${{ matrix.os }}
+    # Deliberate divergence from the upstream template, which has no service containers: nearly every
+    # backend unit test talks to AWS, so localstack has to be available.
+    services:
+      localstack:
+        image: localstack/localstack:4.14.0 # no known reason for not using newer versions, just pinning for best practice
+        ports:
+          - 4566:4566
+        env:
+          AWS_ACCESS_KEY_ID: test
+          AWS_SECRET_ACCESS_KEY: test
+          SERVICES: s3,sts,cloudwatch,ssm,events,iam
     steps:
       - name: Checkout code
         uses: actions/checkout@v7.0.1
@@ -114,6 +129,13 @@ jobs:
         with:
           python-version: 3.13.9
           skip-installing-ssm-plugin-manager: true
+
+      # Deliberate divergence from the upstream template: the tests authenticate to localstack through this
+      # named AWS profile, which the devcontainer creates the same way in on-create-command-boilerplate.sh
+      - name: Create AWS profile
+        run: |
+          sh .devcontainer/create-aws-profile.sh
+          cat ~/.aws/config
 
       - name: Unit test
         run: uv --directory=backend run pytest tests/unit --durations=5
