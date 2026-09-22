@@ -1,28 +1,6 @@
 {
   "templates": [
     {
-      "src": "gh:LabAutomationAndScreening/copier-python-package-template",
-      "parent_src": "gh:LabAutomationAndScreening/copier-base-template.git",
-      "managed_files": [
-        ".config/.copier-answers.yml",
-        ".devcontainer/code-artifact-auth.sh",
-        ".github/.codecov.yml",
-        ".github/actions/ecr-auth/action.yml",
-        ".github/workflows/release.yaml",
-        ".readthedocs.yaml",
-        "docs/Makefile",
-        "docs/_static/.gitkeep",
-        "docs/conf.py",
-        "docs/index.rst",
-        "docs/make.bat",
-        "docs/requirements.txt",
-        "pyrightconfig.json",
-        "src/entrypoint.py",
-        "tests/unit/__init__.py",
-        "tests/unit/conftest.py"
-      ]
-    },
-    {
       "src": "gh:LabAutomationAndScreening/copier-base-template.git",
       "managed_files": [
         ".claude/.beads/.gitignore",

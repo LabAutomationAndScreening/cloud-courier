@@ -59,6 +59,32 @@ jobs:
       setup-node: true
       node-version: 24.11.1
 
+  # Specific to this repository: the upstream template has no Sphinx docs, so this job is a deliberate
+  # divergence rather than something to backport.
+  build-docs:
+    name: Build Docs
+    timeout-minutes: 8
+    needs:
+      - lint
+      - check-skip-duplicate
+    if: needs.check-skip-duplicate.outputs.should-run == 'true'
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v7.0.1
+
+      - name: Install latest versions of python packages
+        uses: ./.github/actions/install_deps
+        with:
+          python-version: 3.13.9
+          skip-installing-ssm-plugin-manager: true
+
+      # --no-project because the docs import nothing from the app; they build from docs/requirements.txt
+      # alone, which is also exactly what ReadTheDocs installs, so the two cannot drift apart.
+      - name: Build docs
+        working-directory: ./docs
+        run: uv run --no-project --with-requirements requirements.txt make html SPHINXOPTS="-W"
+
   unit-test-frontend:
     name: Unit Test Frontend
     timeout-minutes: 8
@@ -381,6 +407,7 @@ jobs:
       - get-values
       - check-skip-duplicate
       - lint
+      - build-docs
       - unit-test-frontend
       - build-frontend
       - unit-test-backend
