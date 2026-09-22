@@ -58,12 +58,10 @@ class TestWhenAppServed:
 
         spied_start_courier.assert_called_once_with(app.state.courier_args, stop_event=stop_event)
 
-    def test_Given_upload_agent_running__When_app_shuts_down__Then_stop_event_set(
-        self, spied_start_courier: MagicMock
-    ):
+    def test_Given_upload_agent_running__When_app_shuts_down__Then_stop_event_set(self, spied_start_courier: MagicMock):
         agent_started = threading.Event()
 
-        def _wait_for_stop(_cli_args: argparse.Namespace, *, stop_event: threading.Event) -> int:
+        def _wait_for_stop(_cli_args: argparse.Namespace, *, stop_event: threading.Event) -> int:  # noqa: ARG001 # the signature has to match start_courier, whose CLI arguments this agent does not need
             agent_started.set()
             _ = stop_event.wait()
             return 0
@@ -77,9 +75,7 @@ class TestWhenAppServed:
 
         assert stop_event.is_set() is True
 
-    def test_Given_upload_agent_raises__Then_failure_recorded_and_stop_event_set(
-        self, spied_start_courier: MagicMock
-    ):
+    def test_Given_upload_agent_raises__Then_failure_recorded_and_stop_event_set(self, spied_start_courier: MagicMock):
         spied_start_courier.side_effect = RuntimeError(str(uuid.uuid4()))
         stop_event = _set_courier_args()
 
