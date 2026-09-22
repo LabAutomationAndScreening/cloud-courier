@@ -63,6 +63,9 @@ function startBuiltBackend(): void {
       // in CI, sometimes the default port to deploy on is already in use, so we use a random open port
       "--port",
       port,
+      // specific to this repository: there is no AWS account reachable from the E2E runners, and an upload
+      // agent that cannot reach AWS stops the whole process. Serve the API on its own.
+      "--skip-upload-agent",
     ],
     {
       // TODO: figure out why Github CI pipelines fail without setting all allowed hosts
