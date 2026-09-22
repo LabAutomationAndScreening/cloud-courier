@@ -15,15 +15,11 @@ from backend_api.entrypoint.crash_dump import resolve_crash_dump_path
 from backend_api.entrypoint.crash_dump import write_crash_dump
 from backend_api.jinja_constants import APP_NAME
 
-from .fixtures import GENERIC_REQUIRED_CLI_ARGS
-
 
 def test_Given_log_folder_in_service_argv__When_resolved__Then_path_is_log_folder_joined_with_filename():
     log_folder = str(Path(tempfile.gettempdir()) / str(uuid4()))
 
-    # the required args are always present in the service ImagePath, and resolve_crash_dump_path
-    # falls back to the temp dir whenever the argv it is handed does not parse
-    resolved = resolve_crash_dump_path([*GENERIC_REQUIRED_CLI_ARGS, "--log-folder", log_folder])
+    resolved = resolve_crash_dump_path(["--log-folder", log_folder])
 
     assert resolved == Path(log_folder) / CRASH_DUMP_FILENAME
 

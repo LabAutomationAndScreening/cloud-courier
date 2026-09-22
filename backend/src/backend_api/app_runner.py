@@ -43,7 +43,12 @@ def start_app(cli_args: argparse.Namespace, *, stop_event: threading.Event | Non
     log_folder = Path("logs")
     if cli_args.log_folder is not None:
         log_folder = Path(cli_args.log_folder)
-    configure_logging(log_level=cli_args.log_level, log_filename_prefix=str(log_folder / f"{APP_NAME}-"))
+    configure_logging(
+        log_level=cli_args.log_level,
+        log_filename_prefix=str(log_folder / f"{APP_NAME}-"),
+        # specific to this repository: some SSM Run Commands cannot cope with console output
+        suppress_console_logging=bool(cli_args.no_console_logging),
+    )
     app_specific_setup()
     logger.info(f"Starting uvicorn server based on CLI arguments: {cli_args}")
     if stop_event is None:
@@ -53,9 +58,21 @@ def start_app(cli_args: argparse.Namespace, *, stop_event: threading.Event | Non
     else:
         effective_stop_event = stop_event
     assert isinstance(cli_args.log_level, str), f"Expected log_level to be a str, got {type(cli_args.log_level)}"
-    return run(
+    # specific to this repository: the app's lifespan reads these to start the upload agent alongside the
+    # server, following the same convention as `app.state.port` in the sibling weight-sensor-driver repo
+    app.state.courier_args = cli_args
+    app.state.stop_event = effective_stop_event
+    exit_code = run(
         stop_event=effective_stop_event,
         host=cli_args.host,
         port=cli_args.port,
         log_level=cli_args.log_level.lower(),
     )
+    try:
+        courier_failed = app.state.courier_failed
+    except AttributeError:
+        courier_failed = False
+    if courier_failed:
+        # a crashed upload agent must not look like a clean admin stop to the service control manager
+        return 1
+    return exit_code

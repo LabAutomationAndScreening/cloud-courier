@@ -51,40 +51,45 @@ class TestCliArgParsing:
         expected_log_level = random_non_info_log_level()
         self._spy_on_configure_logging()
 
-        self._run_entrypoint([*GENERIC_REQUIRED_CLI_ARGS, f"--log-level={expected_log_level}"])
+        self._run_entrypoint([f"--log-level={expected_log_level}"])
 
-        self.spied_configure_logging.assert_called_once_with(log_level=expected_log_level, log_filename_prefix=ANY)
+        self.spied_configure_logging.assert_called_once_with(
+            log_level=expected_log_level,
+            log_filename_prefix=ANY,
+            suppress_console_logging=ANY,  # specific to this repository, covered by its own test
+        )
 
     def test_Given_log_folder_specified__Then_log_folder_passed_to_configure_logging(self):
         self._spy_on_configure_logging()
         with tempfile.TemporaryDirectory() as temp_dir:
             expected_log_folder = temp_dir
 
-            self._run_entrypoint([*GENERIC_REQUIRED_CLI_ARGS, f"--log-folder={expected_log_folder}"])
+            self._run_entrypoint([f"--log-folder={expected_log_folder}"])
 
         self.spied_configure_logging.assert_called_once_with(
             log_filename_prefix=str(Path(expected_log_folder) / f"{APP_NAME}-"),
             log_level=ANY,
+            suppress_console_logging=ANY,  # specific to this repository, covered by its own test
         )
 
     def test_Given_log_level_specified__Then_log_level_passed_to_uvicorn(self):
         expected_log_level = random_non_info_log_level()
 
-        self._run_entrypoint([*GENERIC_REQUIRED_CLI_ARGS, f"--log-level={expected_log_level}"])
+        self._run_entrypoint([f"--log-level={expected_log_level}"])
 
         assert self._built_config().log_level == expected_log_level.lower()
 
     def test_Given_port_specified__Then_port_passed_to_uvicorn(self):
         expected_port = random.randint(1000, 9999)
 
-        self._run_entrypoint([*GENERIC_REQUIRED_CLI_ARGS, f"--port={expected_port}"])
+        self._run_entrypoint([f"--port={expected_port}"])
 
         assert self._built_config().port == expected_port
 
     def test_Given_host_specified__Then_host_passed_to_uvicorn(self):
         expected_host = str(uuid4())
 
-        self._run_entrypoint([*GENERIC_REQUIRED_CLI_ARGS, f"--host={expected_host}"])
+        self._run_entrypoint([f"--host={expected_host}"])
 
         assert self._built_config().host == expected_host
 
@@ -105,7 +110,9 @@ class TestCliArgParsing:
         self._run_entrypoint(GENERIC_REQUIRED_CLI_ARGS)
 
         self.spied_configure_logging.assert_called_once_with(
-            log_filename_prefix=str(Path("logs") / f"{APP_NAME}-"), log_level="INFO"
+            log_filename_prefix=str(Path("logs") / f"{APP_NAME}-"),
+            log_level="INFO",
+            suppress_console_logging=False,  # specific to this repository: the default when --no-console-logging is absent
         )
 
     def test_Given_no_args__Then_default_log_config_used_for_uvicorn(self):

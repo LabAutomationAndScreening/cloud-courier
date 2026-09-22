@@ -5,15 +5,18 @@
 # You are welcome to make changes to this file in your repo if they are custom to your project,
 # but if the change should be shared with other projects, please backport it to the template repo.
 # =====================================================================================================
+import asyncio
 import logging
 import os
 import threading
 import time
+from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Annotated
 from typing import Any
 from typing import override
 
+from fastapi import FastAPI
 from fastapi import Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
@@ -24,8 +27,12 @@ from .camel_case_model import CamelCaseModel
 from .entrypoint.parser import get_version
 from .fast_api_exception_handlers import register_exception_handlers
 from .jinja_constants import HUMAN_FRIENDLY_APP_NAME
+from .main import start_courier
 
 logger = logging.getLogger(__name__)
+# how long to wait for the upload agent to finish its current work once it has been told to stop. Kept well
+# inside the 30s grace period SvcStop allows before the service control manager force-terminates the process.
+COURIER_SHUTDOWN_TIMEOUT_SECONDS = 20
 BASE_DIR = Path(__file__).parent.parent
 STATIC_DIR = BASE_DIR / "static"
 API_DESCRIPTION = "Agent to upload files to cloud"
@@ -39,8 +46,56 @@ OPENAPI_TAGS = [
     *OPENAPI_APP_SPECIFIC_TAGS,
 ]
 
+
+def _start_courier_thread(app: FastAPI) -> threading.Thread | None:
+    try:
+        cli_args = app.state.courier_args
+        stop_event = app.state.stop_event
+    except AttributeError:
+        # the app is being served without going through the entrypoint, as in the unit tests that build a
+        # TestClient or a `uvicorn src.entrypoint:app --reload` dev session. There are no CLI arguments to
+        # run the agent with, so serve the API alone rather than guessing at an AWS region or a watch folder.
+        logger.info("No CLI arguments found on the app state, so the upload agent will not be started")
+        return None
+    if cli_args.skip_upload_agent:
+        logger.info("Serving the API without the upload agent, because --skip-upload-agent was passed")
+        return None
+
+    def run_courier() -> None:
+        try:
+            _ = start_courier(cli_args, stop_event=stop_event)
+        except Exception:
+            logger.exception("The upload agent stopped because of an unhandled exception")
+            app.state.courier_failed = True
+        finally:
+            # whatever stopped the agent, stop the server with it. A process serving healthchecks while
+            # silently uploading nothing looks identical to a working one.
+            stop_event.set()
+
+    thread = threading.Thread(target=run_courier, name="cloud-courier-agent", daemon=True)
+    thread.start()
+    return thread
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    courier_thread = _start_courier_thread(app)
+    try:
+        yield
+    finally:
+        if courier_thread is not None:
+            app.state.stop_event.set()
+            await asyncio.to_thread(courier_thread.join, COURIER_SHUTDOWN_TIMEOUT_SECONDS)
+            if courier_thread.is_alive():
+                logger.error(
+                    f"The upload agent did not stop within {COURIER_SHUTDOWN_TIMEOUT_SECONDS}s; "
+                    "an upload may have been interrupted"
+                )
+
+
 try:
     app = FastAPIOffline(
+        lifespan=lifespan,
         title=HUMAN_FRIENDLY_APP_NAME,
         description=API_DESCRIPTION,
         openapi_tags=OPENAPI_TAGS,

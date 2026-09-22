@@ -39,9 +39,13 @@ _ = parser.add_argument("--host", type=str, default=DEFAULT_DEPLOYED_HOST, help=
 # Arguments specific to this repository
 _ = parser.add_argument(
     "--aws-region",
-    required=True,
     type=str,
     help="The AWS Region the cloud-courier infrastructure is deployed to (e.g. us-east-1).",
+)
+_ = parser.add_argument(
+    "--skip-upload-agent",
+    action="store_true",
+    help="Serve the API without starting the upload agent. Useful for testing the server in isolation.",
 )
 _ = parser.add_argument(
     "--immediate-shut-down",
@@ -62,7 +66,6 @@ _ = parser.add_argument(
     "--stop-flag-dir",
     type=str,
     help="The directory where the program looks for flag files (e.g. telling it to shut down).",
-    required=True,
 )
 _ = parser.add_argument(
     "--idle-loop-sleep-seconds",

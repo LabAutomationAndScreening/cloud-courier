@@ -8,19 +8,15 @@
 import logging
 import random
 import signal
-import tempfile
 import threading
 
 import pytest
 import uvicorn
 from pytest_mock import MockerFixture
 
-# cloud-courier's parser marks --aws-region and --stop-flag-dir as required, so every entrypoint
-# invocation in these template-provided tests has to supply them.
-GENERIC_REQUIRED_CLI_ARGS: tuple[str, ...] = (
-    "--aws-region=us-east-1",
-    f"--stop-flag-dir={tempfile.gettempdir()}",
-)
+# cloud-courier's own arguments are validated where the upload agent uses them, not by argparse, so these
+# template-provided tests need nothing extra.
+GENERIC_REQUIRED_CLI_ARGS: tuple[str, ...] = ()
 
 
 @pytest.fixture(autouse=True)

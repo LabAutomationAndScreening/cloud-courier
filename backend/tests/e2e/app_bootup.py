@@ -270,6 +270,9 @@ def start_exe(*, port: int, env: dict[str, str] | None = None) -> subprocess.Pop
             "0.0.0.0",  # noqa: S104 # until we get Windows CI fully figured out, we're just binding everything
             "--log-folder",  # the backend also writes its own structured JSON log here; CI uploads it on failure
             str(E2E_BACKEND_LOG_DIR),
+            # specific to this repository: there is no AWS account reachable from the E2E runners, and an
+            # upload agent that cannot reach AWS stops the whole process. Serve the API on its own.
+            "--skip-upload-agent",
         ],
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,

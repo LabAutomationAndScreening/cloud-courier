@@ -66,6 +66,9 @@ def _install_service(*, port: int, log_folder: Path, extra_runtime_args: Sequenc
         str(log_folder),
         "--host",
         "0.0.0.0",  # noqa: S104 # match e2e pattern: bind everything until Windows CI networking sorted out
+        # specific to this repository: the Windows CI runner has no AWS account to reach, and an upload agent
+        # that cannot reach AWS stops the whole process, which would look like a service crash
+        "--skip-upload-agent",
         *extra_runtime_args,
     )
 

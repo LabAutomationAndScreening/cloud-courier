@@ -4,9 +4,7 @@ import logging
 import os
 import queue
 import threading
-import time
 from collections import defaultdict
-from collections.abc import Sequence
 from pathlib import Path
 from queue import SimpleQueue
 from typing import override
@@ -32,17 +30,20 @@ from .courier_config_models import CLOUDWATCH_INSTANCE_ID_DIMENSION_NAME
 from .courier_config_models import HEARTBEAT_METRIC_NAME
 from .courier_config_models import FolderToWatch
 from .entrypoint.parser import get_version
-from .entrypoint.parser import parser
 from .load_config import CourierConfig
 from .load_config import extract_role_name_from_arn
 from .load_config import load_config_from_aws
-from .logger_config import configure_logging
 from .upload import convert_path_to_s3_object_key
 from .upload import upload_to_s3
 
 RESET_POINT_FOR_LOOP_ITERATION_COUNTER = 20  # this is only for assertions in unit tests, so just reset the value if it gets arbitrarily high so that it doesn't cause an overflow when running in production
 INSTALLED_AGENT_VERSION_TAG_KEY = "installed-cloud-courier-agent-version"  # Warning! This tag key is originally created by the cloud-courier-infrastructure Pulumi code, so don't change it here without changing it there
 logger = logging.getLogger(__name__)
+
+
+class MissingCourierArgumentError(ValueError):
+    def __init__(self, argument_name: str):
+        super().__init__(f"{argument_name} is required to run the upload agent")
 
 
 class FileEventInfo(BaseModel, frozen=True):
@@ -135,19 +136,25 @@ class EventHandler(FileSystemEventHandler):
 
 
 class MainLoop:
-    def __init__(
+    def __init__(  # noqa: PLR0913 # every argument here is keyword-only and names a distinct collaborator, so grouping them into a config object would add indirection without removing anything a caller has to know
         self,
         *,
         stop_flag_dir: str,
         boto_session: boto3.Session,
         idle_loop_sleep_seconds: float,
         previously_uploaded_files_record_path: Path,
+        stop_event: threading.Event | None = None,
         create_duplicate_event_stream_for_test_monitoring: bool = False,
     ):
         super().__init__()
         self.num_loop_iterations = 0
         self.create_duplicate_event_stream_for_test_monitoring = create_duplicate_event_stream_for_test_monitoring
         self.previously_uploaded_files_record_path = previously_uploaded_files_record_path
+        if stop_event is None:
+            # a caller that does not share an event still gets one, so the loop has a single stop path
+            self.stop_event = threading.Event()
+        else:
+            self.stop_event = stop_event
         self.stop_flag_dir = Path(stop_flag_dir)
         self.boto_session = boto_session
         self._idle_loop_sleep_seconds = idle_loop_sleep_seconds
@@ -284,6 +291,9 @@ class MainLoop:
         self.main_loop_entered.set()
         while True:
             self._send_heartbeat_if_needed()
+            if self.stop_event.is_set():
+                logger.info("Stop event set. Exiting the main loop")
+                break
             if any(
                 item.is_file() for item in self.stop_flag_dir.iterdir()
             ):  # TODO: maybe use a separate observer for the stop file
@@ -305,7 +315,11 @@ class MainLoop:
 
     def _idle_loop_sleep(self):
         # breaking out as separate method for easier testing
-        time.sleep(self._idle_loop_sleep_seconds)  # TODO: dont sleep if there are events in the queue
+        # waiting on the stop event rather than sleeping means a shutdown is noticed immediately instead of
+        # after the remainder of the idle interval, which matters for the 30s grace period SvcStop allows
+        _ = self.stop_event.wait(
+            timeout=self._idle_loop_sleep_seconds
+        )  # TODO: dont sleep if there are events in the queue
 
 
 def _create_ssm_client(boto_session: boto3.Session) -> SSMClient:
@@ -344,40 +358,39 @@ def _update_instance_tag(*, boto_session: boto3.Session, role_arn: str):
     )
 
 
-def entrypoint(argv: Sequence[str]) -> int:
-    try:
-        try:
-            cli_args = parser.parse_args(argv)
-        except argparse.ArgumentError:
-            logger.exception("Error parsing command line arguments")
-            return 2  # this is the exit code that is normally returned when exit_on_error=True for argparse
-        log_folder = Path("logs")
-        if cli_args.log_folder is not None:
-            log_folder = Path(cli_args.log_folder)
-        configure_logging(
-            log_level=cli_args.log_level,
-            log_filename_prefix=str(log_folder / "cloud-courier-"),
-            suppress_console_logging=bool(cli_args.no_console_logging),
-        )  # TODO: move the logs folder into ProgramData by default
-        logger.info('Starting "cloud-courier"')
-        boto_session = (
-            boto3.Session() if cli_args.use_generic_boto_session else create_boto_session(cli_args.aws_region)
-        )
-        if cli_args.immediate_shut_down:
-            logger.info("Exiting due to --immediate-shut-down")
-            return 0
-        role_arn = get_role_arn(boto_session)
-        logger.info(f"Connected to AWS as: {role_arn}")
-        _update_instance_tag(boto_session=boto_session, role_arn=role_arn)
-        if cli_args.shut_down_before_main_loop:
-            logger.info("Exiting due to --shut-down-before-main-loop")
-            return 0
-        return MainLoop(
-            stop_flag_dir=cli_args.stop_flag_dir,
-            boto_session=boto_session,
-            idle_loop_sleep_seconds=cli_args.idle_loop_sleep_seconds,
-            previously_uploaded_files_record_path=path_to_previously_uploaded_files_record(),
-        ).run()
-    except Exception:
-        logger.exception("An unhandled exception occurred")
-        raise
+def start_courier(cli_args: argparse.Namespace, *, stop_event: threading.Event) -> int:
+    """Run the upload agent until it is told to stop.
+
+    Blocks for the lifetime of the agent, so callers run it on their own thread. The caller is responsible
+    for setting stop_event once this returns, so that the rest of the process shuts down with it rather than
+    carrying on with a dead agent.
+    """
+    logger.info('Starting "cloud-courier"')
+    # argparse cannot express "required unless --skip-upload-agent", and marking them required outright
+    # would force every caller that only wants the server -- the E2E harnesses, `--version`, the service
+    # management subcommands -- to invent placeholder values. Validate here instead, where the agent is
+    # actually about to use them, so a misconfigured deployment still fails immediately and says why.
+    if cli_args.aws_region is None:
+        raise MissingCourierArgumentError("--aws-region")
+    if cli_args.stop_flag_dir is None:
+        raise MissingCourierArgumentError("--stop-flag-dir")
+    if cli_args.use_generic_boto_session:
+        boto_session = boto3.Session()
+    else:
+        boto_session = create_boto_session(cli_args.aws_region)
+    if cli_args.immediate_shut_down:
+        logger.info("Exiting due to --immediate-shut-down")
+        return 0
+    role_arn = get_role_arn(boto_session)
+    logger.info(f"Connected to AWS as: {role_arn}")
+    _update_instance_tag(boto_session=boto_session, role_arn=role_arn)
+    if cli_args.shut_down_before_main_loop:
+        logger.info("Exiting due to --shut-down-before-main-loop")
+        return 0
+    return MainLoop(
+        stop_flag_dir=cli_args.stop_flag_dir,
+        boto_session=boto_session,
+        idle_loop_sleep_seconds=cli_args.idle_loop_sleep_seconds,
+        previously_uploaded_files_record_path=path_to_previously_uploaded_files_record(),
+        stop_event=stop_event,
+    ).run()

@@ -28,8 +28,8 @@ from .main import RESET_POINT_FOR_LOOP_ITERATION_COUNTER
 from .main import MainLoop
 from .main import add_to_upload_record
 from .main import create_record_file
-from .main import entrypoint
 from .main import parse_upload_record
+from .main import start_courier
 from .upload import MIN_MULTIPART_BYTES
 from .upload import ChecksumMismatchError
 from .upload import calculate_aws_checksum
