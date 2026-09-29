@@ -1,7 +1,8 @@
 {
   "hostRequirements": {
     "cpus": 2,
-    "memory": "4gb"
+    // Static site generation requires more memory
+    "memory": "10gb"
   },
   "dockerComposeFile": "docker-compose.yml",
   "service": "devcontainer",
@@ -18,6 +19,12 @@
       // view latest version https://raw.githubusercontent.com/aws/aws-cli/v2/CHANGELOG.rst
       "version": "2.36.49"
     },
+    "ghcr.io/devcontainers/features/node:2.1.0": {
+      // https://github.com/devcontainers/features/blob/main/src/node/devcontainer-feature.json
+      "version": "24.11.1",
+      "pnpmVersion": "12.4.2",
+      "nvmVersion": "0.40.5",
+    },
     // https://github.com/anthropics/devcontainer-features/blob/main/src/claude-code/devcontainer-feature.json
     "ghcr.io/anthropics/devcontainer-features/claude-code:1.0.5": {},
   },
@@ -28,17 +35,24 @@
         "-AmazonWebServices.aws-toolkit-vscode", // the AWS CLI feature installs this automatically, but it's causing problems in VS Code
         // basic tooling
         // "eamodio.gitlens@15.5.1",
-        "coderabbit.coderabbit-vscode@0.21.8",
+        "coderabbit.coderabbit-vscode@0.21.9",
         "ms-vscode.live-server@0.5.2025051301",
         "MS-vsliveshare.vsliveshare@1.0.5905",
-        "anthropic.claude-code@2.1.278",
+        "anthropic.claude-code@2.1.283",
 
         // Python
         "-ms-python.vscode-pylance", // pyrefly is the language server for this project; ms-python.python auto-installs Pylance via its extension pack, and Pylance then warns on every boot that it's disabled
         "ms-python.python@2026.5.2026052901",
         "meta.pyrefly@1.3.1",
         "ms-vscode-remote.remote-containers@0.414.0",
-        "charliermarsh.ruff@2026.68.0",
+        "charliermarsh.ruff@2026.84.0",
+
+        // VueJS
+        "vue.volar@3.2.5",
+        "vitest.explorer@1.36.0",
+
+        // All javascript
+        "dbaeumer.vscode-eslint@3.0.24",
 
         // Misc file formats
         "bierner.markdown-mermaid@1.29.0",
@@ -70,8 +84,13 @@
       }
     },
   },
+  "forwardPorts": [3000, 4000],
+  "portsAttributes": {
+    "3000": { "label": "Frontend" },
+    "4000": { "label": "Backend" }
+  },
   "initializeCommand": "sh .devcontainer/initialize-command.sh",
   "onCreateCommand": "sh .devcontainer/on-create-command.sh",
   "postStartCommand": "sh .devcontainer/post-start-command.sh"
-  // Devcontainer context hash (do not manually edit this, it's managed by a pre-commit hook): ca55a45c # spellchecker:disable-line
+  // Devcontainer context hash (do not manually edit this, it's managed by a pre-commit hook): d6774dd5 # spellchecker:disable-line
 }

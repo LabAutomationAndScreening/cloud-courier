@@ -8,7 +8,6 @@
 import argparse
 import os
 import platform
-import shlex
 import shutil
 import subprocess
 import sys
@@ -19,12 +18,14 @@ UV_VERSION = "0.12.15"
 PNPM_VERSION = "12.4.2"
 COPIER_VERSION = "==9.18.2"
 COPIER_TEMPLATE_EXTENSIONS_VERSION = "==0.3.3"
-PRE_COMMIT_VERSION = "4.6.2"
-TASK_VERSION = "3.53.1"
+PRE_COMMIT_VERSION = "==4.6.2"
+# identify decides which files each pre-commit hook runs on, so a floating version silently changes what CI checks
+IDENTIFY_VERSION = "==2.6.20"
+TASK_VERSION = "==3.53.1"
 DOWNLOAD_TIMEOUT_SECONDS = 90
-# Where both uv's and Task's installers place binaries. Resolves from USERPROFILE on Windows, so it
-# matches the runner's home directory without assuming its user name. Already on PATH on POSIX, but
-# not on Windows, which is why uv is invoked through an absolute path there.
+# Where uv places both itself and the executables of the tools it installs. Resolves from USERPROFILE
+# on Windows, so it matches the runner's home directory without assuming its user name. Already on
+# PATH on POSIX, but not on Windows, which is why uv is invoked through an absolute path there.
 LOCAL_BIN_DIR = Path.home() / ".local" / "bin"
 INSTALL_SSM_PLUGIN_BY_DEFAULT = False
 # A floor rather than an exact pin: GitHub's runner images ship their own build of the plugin and only
@@ -67,8 +68,41 @@ def pwsh_cmd(cmd: str) -> list[str]:
     return [pwsh, "-NoProfile", "-NonInteractive", "-Command", cmd]
 
 
-def install_task(*, is_windows: bool) -> None:
-    """Install the pinned Task release into `LOCAL_BIN_DIR`.
+def install_uv(uv_env: dict[str, str], *, is_windows: bool) -> None:
+    """Install the pinned uv release into `LOCAL_BIN_DIR`.
+
+    Runs regardless of `--no-python`, because uv is also how Task is installed, and every job needs
+    the task runner even when it has no Python environments to set up.
+
+    `uv_env` is mutated on Windows rather than copied: `LOCAL_BIN_DIR` is not on the runner's PATH
+    there, and every later uv invocation needs it in front.
+    """
+    if is_windows:
+        uv_env.update({"PATH": rf"{LOCAL_BIN_DIR};{uv_env['PATH']}"})
+        _ = subprocess.run(  # noqa: S603 # this is all our own input
+            pwsh_cmd(f"irm https://astral.sh/uv/{UV_VERSION}/install.ps1 | iex"),
+            check=True,
+            env=uv_env,
+            timeout=DOWNLOAD_TIMEOUT_SECONDS,
+        )
+    else:
+        _ = subprocess.run(  # noqa: S602 # we need to set shell to true to use the pipe operator, and this is all our own input
+            f"curl -fsSL --connect-timeout 20 --max-time 40 --retry 3 --retry-delay 5 --retry-connrefused --proto '=https' https://astral.sh/uv/{UV_VERSION}/install.sh | sh",
+            check=True,
+            shell=True,
+            env=uv_env,
+            timeout=DOWNLOAD_TIMEOUT_SECONDS,
+        )
+        # TODO: add uv autocompletion to the shell https://docs.astral.sh/uv/getting-started/installation/#shell-autocompletion
+
+
+def install_task(uv_path: str, uv_env: dict[str, str], *, is_windows: bool) -> None:
+    """Install the pinned Task release into `LOCAL_BIN_DIR` as a uv tool.
+
+    `go-task-bin` repackages the upstream release archives as one wheel per platform, so a single uv
+    invocation covers Windows, macOS and Linux on both x86_64 and arm64. Task publishes nothing to
+    PyPI itself, so this is knowingly a third-party distribution: the version is pinned and uv
+    records the wheel hash in the tool receipt it writes.
 
     Deliberately not `npm install -g @go-task/cli`: that writes to the global prefix of whichever
     node is on PATH, and in CI that is the pnpm-managed node installed by `pnpm/setup`, whose prefix
@@ -79,43 +113,15 @@ def install_task(*, is_windows: bool) -> None:
     install; `GITHUB_PATH` is appended so later steps in the same CI job can invoke `task` by name.
     """
     LOCAL_BIN_DIR.mkdir(parents=True, exist_ok=True)
+    _ = subprocess.run(  # noqa: S603 # this is all our own input
+        [uv_path, "tool", "install", f"go-task-bin{TASK_VERSION}"],
+        check=True,
+        env=uv_env,
+        timeout=DOWNLOAD_TIMEOUT_SECONDS,
+    )
     if is_windows:
-        if platform.machine().lower() == "arm64":
-            windows_arch = "arm64"
-        else:
-            windows_arch = "amd64"
-        archive_url = (
-            f"https://github.com/go-task/task/releases/download/v{TASK_VERSION}/task_windows_{windows_arch}.zip"
-        )
-        # The bin directory is handed over as an environment variable rather than interpolated into the
-        # script text: PowerShell single quotes take no escapes, so an apostrophe in the home directory
-        # would terminate the string early. A variable reference is one argument whatever it contains.
-        task_env = dict(os.environ)
-        task_env.update({"TASK_BIN_DIR": str(LOCAL_BIN_DIR)})
-        powershell_statements = [
-            "$ErrorActionPreference = 'Stop'",
-            "$archive = Join-Path $env:TEMP 'task-release.zip'",
-            f"Invoke-WebRequest -UseBasicParsing -Uri '{archive_url}' -OutFile $archive",
-            "Expand-Archive -Path $archive -DestinationPath $env:TASK_BIN_DIR -Force",
-            "Remove-Item $archive",
-        ]
-        _ = subprocess.run(  # noqa: S603 # this is all our own input
-            pwsh_cmd("; ".join(powershell_statements)),
-            check=True,
-            env=task_env,
-            timeout=DOWNLOAD_TIMEOUT_SECONDS,
-        )
         task_path = LOCAL_BIN_DIR / "task.exe"
     else:
-        # The installer resolves the pinned tag against the published checksums, so the archive is verified.
-        # The bin directory is shell-quoted because a space or apostrophe in the home directory would
-        # otherwise split it into multiple arguments, or unbalance the quoting outright.
-        _ = subprocess.run(  # noqa: S602 # we need to set shell to true to use the pipe operator, and this is all our own input
-            f"curl -fsSL --connect-timeout 20 --max-time 40 --retry 3 --retry-delay 5 --retry-connrefused --proto '=https' https://taskfile.dev/install.sh | sh -s -- -b {shlex.quote(str(LOCAL_BIN_DIR))} v{TASK_VERSION}",
-            check=True,
-            shell=True,
-            timeout=DOWNLOAD_TIMEOUT_SECONDS,
-        )
         task_path = LOCAL_BIN_DIR / "task"
     _ = subprocess.run([str(task_path), "--version"], check=True)  # noqa: S603 # this is all our own input
     if "GITHUB_PATH" in os.environ:
@@ -248,24 +254,8 @@ def main():
         uv_path = str(LOCAL_BIN_DIR / "uv")
     else:
         uv_path = "uv"
+    install_uv(uv_env, is_windows=is_windows)
     if not args.no_python:
-        if is_windows:
-            uv_env.update({"PATH": rf"{LOCAL_BIN_DIR};{uv_env['PATH']}"})
-            _ = subprocess.run(  # noqa: S603 # this is all our own input
-                pwsh_cmd(f"irm https://astral.sh/uv/{UV_VERSION}/install.ps1 | iex"),
-                check=True,
-                env=uv_env,
-                timeout=DOWNLOAD_TIMEOUT_SECONDS,
-            )
-        else:
-            _ = subprocess.run(  # noqa: S602 # we need to set shell to true to use the pipe operator, and this is all our own input
-                f"curl -fsSL --connect-timeout 20 --max-time 40 --retry 3 --retry-delay 5 --retry-connrefused --proto '=https' https://astral.sh/uv/{UV_VERSION}/install.sh | sh",
-                check=True,
-                shell=True,
-                env=uv_env,
-                timeout=DOWNLOAD_TIMEOUT_SECONDS,
-            )
-            # TODO: add uv autocompletion to the shell https://docs.astral.sh/uv/getting-started/installation/#shell-autocompletion
         _ = subprocess.run(  # noqa: S603 # this is all our own input
             [
                 uv_path,
@@ -284,25 +274,27 @@ def main():
                 uv_path,
                 "tool",
                 "install",
-                f"pre-commit=={PRE_COMMIT_VERSION}",
+                f"pre-commit{PRE_COMMIT_VERSION}",
+                "--with",
+                f"identify{IDENTIFY_VERSION}",
             ],
             check=True,
             env=uv_env,
             timeout=DOWNLOAD_TIMEOUT_SECONDS,
         )
-        _ = subprocess.run(  # noqa: S603 # this is all our own input
-            [
-                uv_path,
-                "tool",
-                "list",
-            ],
-            check=True,
-            env=uv_env,
-        )
     if not args.no_node:
         run_node_cmds(["npm -v", f"npm install -g pnpm@{PNPM_VERSION}", "pnpm -v"], is_windows=is_windows)
     # Task is installed outside the --no-node branch because CI always passes --no-node (pnpm/setup handles pnpm there), and every job still needs the task runner
-    install_task(is_windows=is_windows)
+    install_task(uv_path, uv_env, is_windows=is_windows)
+    _ = subprocess.run(  # noqa: S603 # this is all our own input
+        [
+            uv_path,
+            "tool",
+            "list",
+        ],
+        check=True,
+        env=uv_env,
+    )
     if INSTALL_SSM_PLUGIN_BY_DEFAULT and not args.skip_installing_ssm_plugin:
         ensure_ssm_plugin(is_windows=is_windows)
 

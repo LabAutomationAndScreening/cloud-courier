@@ -1,6 +1,8 @@
 # Project Structure
 
-This project is a Python library.
+- This is a statically generated frontend---using the Nuxt and @nuxt/ui frameworks---meant to operate in an air-gapped environment. That code is in the `frontend/` directory.
+- There may also be a backend that the frontend interacts with, in `backend/`. If present, it will be a Python FastAPI uvicorn server.
+- Kiota is used for codegen from the OpenAPI schema
 
 # Code Guidelines
 
@@ -64,10 +66,21 @@ This project is a Python library.
 - **Never hand-edit syrupy snapshot files.** Snapshots are auto-generated — to create or update them, run `uv run pytest --snapshot-update <test path> --no-cov`. A missing snapshot causes the test to fail, which is expected until you run with `--snapshot-update`. When a snapshot mismatch occurs, fix the code if the change was unintentional; run `--snapshot-update` if it was intentional.
 - **Never hand-write or hand-edit pytest-reserial `.jsonl` recording files.** Recordings must be captured from real serial port traffic by running the test with `--record` while the device is connected: `uv run pytest --record <test path> --no-cov`. The default mode replays recordings — a missing recording causes an error, which is expected until recorded against a live device.
 
+#### FastAPI Testing
+
+- Assert on the response model, not raw JSON: `problem = ProblemDetails.model_validate(response.json())`, then `assert problem.error_type == ...` rather than `response.json()["errorType"]`. String keys are invisible to the type checker and yield implicit `Any`, and validating checks the whole payload against the schema (camelCase aliases included) rather than only the keys the test reads.
+
 ### Frontend Testing
 
 - When a `data-testid` identifies one of many rendered entities, interpolate that entity's stable identifier as the dynamic value, not its display label — prefer an ID (`item.itemId`, `record.sha`) whenever the entity has one, since labels collide and change. Where the identifier *is* human-readable and no ID exists, that name is the key.
 - In DOM-based unit tests, scope queries to the tightest relevant container. Only query `document` or `document.body` directly to find the top-level portal/popup element (e.g. a Reka UI dialog via `[role="dialog"][data-state="open"]`); all further queries should run on that element, not on `document.body` again. Browser automation (e.g. Playwright) fails an ambiguous single-target locator outright, so a unique `data-testid` looked up from the page is enough there.
+
+## FastAPI
+- Use `fastapi.status` constants (e.g., `status.HTTP_204_NO_CONTENT`) instead of raw integers for status codes
+- All HTTP request and response payloads must use camelCase field names in JSON. Use Pydantic's `alias_generator=to_camel` with `populate_by_name=True` on models so that Python code uses snake_case internally while the wire format uses camelCase.
+- When a route raises an `HTTPException` for a specific status code, document it in the route decorator's `responses` parameter using `fastapi.status` constants: `responses={status.HTTP_404_NOT_FOUND: {"description": "Resource not found", "content": {"application/problem+json": {"example": {"detail":"ID xyz was not found"},"schema": {"$ref": "#/components/schemas/ProblemDetails"}}}}}`. This ensures the OpenAPI schema reflects all possible responses, not just the success case.
+- Do not apply the keyword-only parameter rule (`*`) to FastAPI route function parameters — FastAPI resolves them via dependency injection and the functions are never called directly from Python code, so keyword-only syntax has no effect.
+- The prohibition of one-line docstrings does not apply to docstrings that become OpenAPI schema text (component-schema models and route handlers).
 
 # Agent Implementations & Configurations
 
@@ -81,6 +94,7 @@ This project is a Python library.
 - Before hand-assembling a multi-step workflow, run `task --list` — it is probably already a task. Definitions live in `.config/taskfiles/`; the root `Taskfile.yaml` only includes them.
 - The bans on `pnpm --prefix`, `uv --directory` and direct tool invocation apply to commands you type, not to task definitions: a task's commands run with the repo root as their working directory by default. Prefer adding or extending a task over typing the long form.
 - Linting and type-checking stay with `pre-commit run <hook-id>` rather than a task, so that what you run is exactly what CI runs.
+- Regenerating any generated client is `task codegen` (or an individual `gen-*-client` task from `task --list`) — never hand-edit anything under a `generated/` folder.
 - `cd` into a subdirectory is auto-approved; navigating up (`cd ..`) or to an absolute path (`cd /some/path`) requires a user permission prompt. Minimize such navigation: run `pre-commit` from whichever subdirectory you're already in (it walks up to find `.pre-commit-config.yaml`).
 - ❌ Never use `python3` or `python` directly. ✅ Always use `uv run python` for Python commands.
 - ❌ Never use `python3`/`python` for one-off data tasks. ✅ Use `jq` for JSON parsing, standard shell builtins for string manipulation. Only reach for `uv run python` when no dedicated tool covers the need.

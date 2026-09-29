@@ -1,0 +1,47 @@
+[run]
+branch = True
+omit =
+    # omit anything supplied by vendors
+    */vendor_files/*
+    # omit any auto-generated API client code
+    */generated/open_api/*
+    # omit CircuitPython firmware
+    */firmware/code.py
+    */firmware/boot.py
+    # code is tested in upstream copier template
+    */src/backend_api/openapi_schema_simplifier.py
+    # a pyinstaller entrypoint cannot be unit tested, only E2E tested
+    */src/entrypoint.py
+    # Windows service class is tested via Windows CI E2E, not unit tests
+    */src/backend_api/entrypoint/win_service.py
+
+[report]
+# Regexes for lines to exclude from consideration
+exclude_also =
+    # Don't complain if tests don't hit defensive assertion code:
+    raise NotImplementedError
+    raise AssertionError
+
+    # Don't complain about code specifically to help with pyrefly import resolution
+    if TYPE_CHECKING:
+
+    # Don't complain if non-runnable code isn't run:
+    if __name__ == .__main__.:
+
+    # Abstract methods inherently can't be hit
+    @abstractmethod
+
+    # CircuitPython-specific code can't be tested in CPython
+    if sys.implementation.name == "circuitpython":
+
+fail_under = 100
+[html]
+directory = coverage-report-pytest
+
+# ============== WARNING ==============================================================================
+# File is managed by copier template: gh:LabAutomationAndScreening/copier-base-template.git
+# See .config/.copier-managed-files.json for details.
+#
+# You are welcome to make changes to this file in your repo if they are custom to your project,
+# but if the change should be shared with other projects, please backport it to the template repo.
+# =====================================================================================================

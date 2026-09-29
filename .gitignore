@@ -109,6 +109,9 @@ node_modules/
 # Nuxt generate creates a symlink to the dist folder, which can't have trailing slash
 dist
 
+# vacuum OpenAPI lint reports (generated ad-hoc; the linter runs against the committed snapshot)
+vacuum-report-*.json
+
 
 # Infrastructure as Code
 .terraform/
@@ -126,5 +129,7 @@ dist
 # Devcontainer
 # The devcontainer CLI writes this lock file to pin feature digests, but we are not using it yet
 .devcontainer/devcontainer-lock.json
+# Written by initialize-command.sh on every devcontainer start
+.devcontainer/.env
 
 # Ignores specific to this repository

@@ -1,0 +1,23 @@
+# ============== WARNING ==============================================================================
+# File is managed by copier template: gh:LabAutomationAndScreening/copier-base-template.git
+# See .config/.copier-managed-files.json for details.
+#
+# You are welcome to make changes to this file in your repo if they are custom to your project,
+# but if the change should be shared with other projects, please backport it to the template repo.
+# =====================================================================================================
+packages:
+ - 'frontend'
+
+# @nuxt/ui 4.7.1 still pins @nuxtjs/color-mode ^3.5.2 as a direct dependency,
+# so without this override pnpm installs a nested v3 alongside our top-level v4.
+# Remove once https://github.com/nuxt/ui/pull/6050 merges and we bump @nuxt/ui.
+overrides:
+  '@nuxtjs/color-mode': ^4.0.0
+
+allowBuilds:
+  # managed by upstream template
+  '@parcel/watcher': false # ships pre-built platform binaries via optional deps; postinstall is redundant
+  esbuild: false # ships pre-built platform binaries via optional deps; postinstall is redundant
+  unrs-resolver: false # ships pre-built platform binaries via optional deps; postinstall is redundant
+  vue-demi: false # postinstall switches Vue 2/3 mode; Vue 3-only project so default is already correct
+  # specific to this repository

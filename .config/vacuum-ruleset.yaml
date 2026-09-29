@@ -1,0 +1,236 @@
+# ============== WARNING ==============================================================================
+# File is managed by copier template: gh:LabAutomationAndScreening/copier-nuxt-python-intranet-app.git
+# See .config/.copier-managed-files.json for details.
+#
+# You are welcome to make changes to this file in your repo if they are custom to your project,
+# but if the change should be shared with other projects, please backport it to the template repo.
+# =====================================================================================================
+# Curated vacuum ruleset for the backend OpenAPI schema.
+#
+# Extends vacuum's built-in OpenAPI "recommended" set, then disables two rules that are noise/false
+# positives for a FastAPI-generated spec and enables a handful of opt-in best-practice rules plus three
+# OWASP data-hardening rules. Every non-default rule carries a comment explaining WHY.
+extends:
+  - - vacuum:oas
+    - recommended
+rules:
+  # DISABLED: flags identical description strings, but ours repeat legitimately — the same field
+  # (e.g. SensorInfo.id) is inherited across many response models, and the same 404 text is reused
+  # across endpoints. Forcing unique wording would make the docs less consistent, not better.
+  description-duplication: "off"
+
+  # DISABLED: `servers` is meaningless here — single-server, air-gapped device, no multi-environment
+  # URLs to document. FastAPI's default "/ - This server" relative entry is all Swagger UI needs.
+  oas3-api-servers: "off"
+
+  # DISABLED: false positive — it does not follow `$ref`, so enum/model-typed properties
+  # (severity, direction, status, measurementType, etc.) that reference a fully-typed component are wrongly
+  # flagged as "missing type". Every code-level workaround trips a different recommended rule
+  # (allOf -> no-unnecessary-combinator; bare $ref -> oas3-missing-example and loses the field
+  # description), so disabling this single shallow rule is the cleanest option. The fields keep their
+  # normal Field(description=, examples=). A FastAPI-generated spec can otherwise only trigger this on
+  # `Any`-typed fields, which are rare and usually unavoidable (e.g. the generated ValidationError.input).
+  oas-missing-type: "off"
+
+  # DISABLED: same false-positive family as `oas-missing-type` above — it checks requestBody.description
+  # / response.description directly and does not follow `$ref`, so it can't see that the payload/response
+  # model's own docstring already documents the body. That forced every route to hand-type a description
+  # duplicating the model docstring almost verbatim. Replaced below by `request-body-description` /
+  # `response-body-description`, which resolve the schema first and pass if either the body itself or its
+  # (dereferenced) schema has a description.
+  operation-description: "off"
+
+  # DISABLED: same false-positive family as `operation-description` above — it only checks for an
+  # `example`/`examples` key on the media type object (or, at the property level, on that property's own
+  # node) and does not resolve `$ref`, so it can't see a body/response model's own field-level examples.
+  # Replaced below by `request-body-example` / `response-body-example`, which resolve the schema first and
+  # pass if an example exists anywhere within it.
+  oas3-missing-example: "off"
+
+  # ENABLED: guarantees every tag used by an operation is declared at the top level with real metadata —
+  # this drives navigation/grouping in docs and Kiota-generated client namespaces.
+  # `true` pulls vacuum's built-in definition verbatim (it's an opt-in rule, absent from `recommended`).
+  openapi-tags: true
+
+  # ENABLED: a tag with no description is useless to a consumer reading the docs — enforce a
+  # human-readable purpose for each of system/debug/devices/data/alarms.
+  tag-description: true
+
+  # ENABLED: keeps each operation to exactly one tag so it appears once in generated navigation/clients
+  # (multi-tagging duplicates operations across groups and confuses codegen). We already tag singly.
+  operation-singular-tag: true
+
+  # ENABLED: a POST with no documented success response is an incomplete contract; ensures every
+  # create/action endpoint declares its 2xx/3xx (we already return 201) so clients know the success shape.
+  post-response-success: true
+
+  # ENABLED: correctness guard — every entry in a schema's `required` list must actually exist in
+  # `properties`. Catches real bugs (typo'd/removed field left in required) that break client codegen.
+  required-fields-defined: true
+
+  # ENABLED (OWASP): three data-hardening rules worth keeping even on an air-gapped/no-auth API. The
+  # rest of the OWASP pack (auth/HTTPS/rate-limit/protection-*/string-restricted) is intentionally NOT
+  # enabled for this trusted air-gapped, no-auth deployment; revisit if the API is ever exposed/authed.
+  owasp-define-error-validation: true
+
+  # Integers must declare int32/int64 `format` so codegen picks the right numeric type.
+  # (Config, not `true`: OWASP rules aren't in the extended set, so `true` would be dropped.)
+  owasp-integer-format: true
+
+  # Integers must declare min/max bounds (input validation / resource-exhaustion guard).
+  owasp-integer-limit: true
+
+  # ENABLED: path id parameters must be explicit and resource-qualified, never a bare generic
+  # identifier. Bare `{id}` is ambiguous in a multi-resource spec and produces collision-prone Kiota
+  # client method names (every resource collapses to `by_id`). The denylist is Tier 1 only
+  # (unambiguously generic tokens). Tier 2 natural-key tokens (code|slug|name|type) are intentionally
+  # excluded because they are often legitimate (e.g. /countries/{code}); add them only if wanted.
+  path-no-generic-id:
+    description: Path id parameters must be explicit, not a bare generic identifier.
+    given: $.paths[*]~
+    severity: error
+    then:
+      function: pattern
+      functionOptions:
+        notMatch: "\\{(id|pk|fk|uid|guid|uuid|oid|key|ref|hash|idx|index|num|no|identifier|value|item|object|entity|record|data|thing)\\}"
+
+  # ENABLED: path PARAMETERS must be snake_case. The kebab-case + lowercase half of our hybrid casing
+  # decision (kebab static segments, snake_case params) is ALREADY enforced by the recommended set's
+  # `paths-kebab-case` rule, which flags non-kebab STATIC segments and ignores `{param}` segments
+  # entirely. This rule adds the parameter half that `paths-kebab-case` does not cover. FastAPI binds a
+  # path parameter's name to a Python function argument (which cannot contain hyphens), so snake_case is
+  # the only practical casing for parameters.
+  path-param-snake-case:
+    description: Path parameters must be snake_case.
+    given: $.paths[*][*].parameters[?(@.in=='path')].name
+    severity: error
+    then:
+      function: casing
+      functionOptions:
+        type: snake
+
+  # ENABLED: query parameters must be camelCase — body params are already camelCase, so matching that
+  # for query params keeps frontend clients consistent instead of converting between casings per field.
+  query-param-camel-case:
+    description: Query parameters must be camelCase.
+    given: $.paths[*][*].parameters[?(@.in=='query')].name
+    severity: error
+    then:
+      function: casing
+      functionOptions:
+        type: camel
+
+  # ENABLED (gov.au API Response): response bodies must be application/json. `application/problem+json`
+  # is also allowed because custom_openapi emits RFC 7807 ProblemDetails error bodies with that media
+  # type. Fires zero violations against the current snapshot.
+  response-media-type-json:
+    description: Response bodies must be application/json (or application/problem+json for errors).
+    given: $.paths[*][*].responses[*].content[*]~
+    severity: error
+    then:
+      function: pattern
+      functionOptions:
+        match: "^application/(json|problem\\+json)$"
+
+  # ENABLED (gov.au API Request): request bodies must be application/json. Fires zero violations against
+  # the current snapshot.
+  request-media-type-json:
+    description: Request bodies must be application/json.
+    given: $.paths[*][*].requestBody.content[*]~
+    severity: error
+    then:
+      function: pattern
+      functionOptions:
+        match: "^application/json$"
+
+  # ENABLED: POST request bodies must not REQUIRE an id — the backend generates it (a client may still
+  # supply an optional one). This targets each entry of the resolved request-body schema's `required`
+  # array and asserts none is literally "id"; if `required` is absent, no nodes match and the rule
+  # passes. (A schema-of-schema `not/contains` approach was tried first but vacuum reported it as a
+  # false positive on every POST body, so this pattern-based form is used instead.)
+  create-body-no-required-id:
+    description: POST request bodies must not require an id (backend-generated).
+    given: $.paths[*].post.requestBody.content.*.schema.required[*]
+    resolved: true
+    severity: error
+    then:
+      function: pattern
+      functionOptions:
+        notMatch: "^id$"
+
+  # ENABLED (gov.au Naming: nouns not verbs). The recommended set's `no-http-verbs-in-path` already
+  # catches HTTP-method names used as path segments; this adds the non-HTTP action verbs it does not
+  # cover. Fires zero violations against the current snapshot.
+  no-action-verbs-in-path:
+    description: Path segments must be nouns, not action verbs.
+    given: $.paths[*]~
+    severity: error
+    then:
+      function: pattern
+      functionOptions:
+        notMatch: "/(list|create|add|update|edit|remove|fetch|retrieve|make)(-|/|$)"
+
+  # ENABLED (gov.au API Response): a 201 Created must return the new resource's Location. This fires on
+  # POST operations that declare a 201 response, so genuine resource creates (add device, create
+  # threshold, create view) declare + emit a Location header. Non-create POST actions should return a
+  # non-201 success (e.g. push measurements returns 202 Accepted) so this rule does not apply to them.
+  # (A `function: schema` form with a nested `required: [Location]` was tried first but vacuum reported
+  # it as a false positive even when the header was present, so this truthy field check is used instead.)
+  location-header-on-201:
+    description: 201 Created responses must declare a Location header.
+    given: $.paths[*].post.responses['201']
+    severity: error
+    then:
+      field: headers.Location
+      function: truthy
+
+  # ENABLED (gov.au Naming: plural resources). Static path segments should be plural resource nouns.
+  # Declarative casing/pattern rules cannot pluralize, so this uses a custom JavaScript function
+  # (.config/vacuum-functions/resourcesPlural.js) run via `vacuum lint -f .config/vacuum-functions`. The
+  # check is heuristic: it flags a static segment only when it is clearly singular (does not end in "s")
+  # and is not in the function's ALLOWLIST of non-collection segments (namespaces, actions, uncountable
+  # nouns). Tune that allowlist in the JS file rather than here.
+  resources-plural:
+    description: Path resource segments should be plural nouns.
+    given: $.paths[*]~
+    severity: error
+    then:
+      function: resourcesPlural
+
+  # ENABLED: replaces the requestBody half of the built-in `operation-description` (disabled above).
+  # Uses .config/vacuum-functions/bodyDescription.js, which resolves the requestBody's schema and passes
+  # if either the requestBody itself or its (dereferenced) schema has a description — so a payload
+  # model's docstring is enough, no hand-typed duplicate needed.
+  request-body-description:
+    description: Request bodies must have a description, either their own or via their schema's docstring.
+    given: $.paths[*][*].requestBody
+    severity: error
+    then:
+      function: bodyDescription
+
+  # ENABLED: same replacement as `request-body-description` above, for response bodies.
+  response-body-description:
+    description: Response bodies must have a description, either their own or via their schema's docstring.
+    given: $.paths[*][*].responses[*]
+    severity: error
+    then:
+      function: bodyDescription
+
+  # ENABLED: replaces the requestBody half of the built-in `oas3-missing-example` (disabled above). Uses
+  # .config/vacuum-functions/bodyExample.js, which resolves the requestBody's schema and passes if an
+  # example exists on the body itself or anywhere within its (dereferenced) schema — so field-level
+  # `Field(examples=[...])` on the payload model is enough, no hand-typed duplicate needed.
+  request-body-example:
+    description: Request bodies must have an example, either their own or via their schema's fields.
+    given: $.paths[*][*].requestBody
+    severity: error
+    then:
+      function: bodyExample
+
+  # ENABLED: same replacement as `request-body-example` above, for response bodies.
+  response-body-example:
+    description: Response bodies must have an example, either their own or via their schema's fields.
+    given: $.paths[*][*].responses[*]
+    severity: error
+    then:
+      function: bodyExample

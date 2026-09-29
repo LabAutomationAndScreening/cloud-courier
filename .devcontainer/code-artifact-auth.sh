@@ -1,7 +1,7 @@
 # Placeholder file not being used by these copier template answers
 
 # ============== WARNING ==============================================================================
-# File is managed by copier template: gh:LabAutomationAndScreening/copier-python-package-template
+# File is managed by copier template: gh:LabAutomationAndScreening/copier-nuxt-python-intranet-app.git
 # See .config/.copier-managed-files.json for details.
 #
 # You are welcome to make changes to this file in your repo if they are custom to your project,

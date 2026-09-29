@@ -1,0 +1,268 @@
+# ============== WARNING ==============================================================================
+# File is managed by copier template: gh:LabAutomationAndScreening/copier-nuxt-python-intranet-app.git
+# See .config/.copier-managed-files.json for details.
+#
+# You are welcome to make changes to this file in your repo if they are custom to your project,
+# but if the change should be shared with other projects, please backport it to the template repo.
+# =====================================================================================================
+name: Build Docker Image
+
+on:
+  workflow_call:
+    inputs:
+      repository:
+        description: 'Docker repository'
+        type: string
+        required: true
+      image_name:
+        description: 'Docker image name'
+        type: string
+        required: true
+      tag-for-production:
+        description: 'Whether or not to add a tag indicating this is being used in production'
+        type: boolean
+        required: false
+        default: false
+      release-tag:
+        description: 'Optional release tag (e.g. 1.0.6) to push to ECR; applied even if an image with the same build-context-hash already exists'
+        type: string
+        required: false
+        default: ''
+      context:
+        description: 'Build context path'
+        type: string
+        required: false
+        default: './'
+      build-contexts:
+        description: 'Additional named build contexts (e.g. "repo-root=.")'
+        type: string
+        required: false
+        default: ''
+      additional-hash-paths:
+        description: 'Space-separated extra file paths (relative to repo root) to include in the build context hash'
+        type: string
+        required: false
+        default: ''
+      push-role-name:
+        type: string
+        description: What's the IAM role name to use for Pushing to the ECR?
+        required: false
+        default: no-push
+      save-as-artifact:
+        type: boolean
+        description: 'Should the image be saved as an artifact?'
+        required: false
+        default: false
+      artifact-retention-days:
+        type: number
+        description: 'Number of days to retain the uploaded image artifact'
+        required: false
+        default: 4
+    outputs:
+      artifact-name:
+        description: 'The name of the uploaded artifact of the image tarball'
+        value: ${{ jobs.build-image.outputs.artifact-name }}
+      full-image-tag:
+        description: 'The full image tag used for the built image (repository/name:context-hash)'
+        value: ${{ jobs.build-image.outputs.full-image-tag }}
+
+permissions:
+    id-token: write
+    contents: write # needed for mutex
+
+jobs:
+  build-image:
+    name: Build Docker Image
+    timeout-minutes: 15
+    runs-on: ubuntu-24.04
+    outputs:
+      artifact-name: ${{ steps.calculate-build-context-hash.outputs.image_name_no_slashes }}
+      full-image-tag: ${{ steps.calculate-build-context-hash.outputs.full_image_tag }}
+    steps:
+      - name: Parse ECR URL
+        if: ${{ inputs.push-role-name != 'no-push' }}
+        id: parse_ecr_url
+        run: |
+          ECR_URL="${{ inputs.repository}}"
+
+          # Extract the AWS Account ID, which is the first field
+          AWS_ACCOUNT_ID=$(echo "$ECR_URL" | cut -d. -f1)
+
+          # Extract the AWS Region, which is the fourth field in the URL structure
+          AWS_REGION=$(echo "$ECR_URL" | cut -d. -f4)
+
+          # Set the outputs for use in later steps
+          echo "aws_account_id=${AWS_ACCOUNT_ID}" >> "$GITHUB_OUTPUT"
+          echo "aws_region=${AWS_REGION}" >> "$GITHUB_OUTPUT"
+        shell: bash
+
+      - name: Checkout code
+        uses: actions/checkout@v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: OIDC Auth for ECR
+        if: ${{ inputs.push-role-name != 'no-push' }}
+        uses: ./.github/actions/ecr-auth
+        with:
+          role-arn: arn:aws:iam::${{ steps.parse_ecr_url.outputs.aws_account_id }}:role/${{ inputs.push-role-name }}
+          aws-region: ${{ steps.parse_ecr_url.outputs.aws_region }}
+
+      - name: Calculate hash of files in build context
+        id: calculate-build-context-hash
+        run: |
+          python3 --version
+          EXTRA_PATHS="${{ inputs.additional-hash-paths }}"
+          EXTRA_ARGS=""
+          if [ -n "$EXTRA_PATHS" ]; then
+            EXTRA_ARGS="--extra-paths $EXTRA_PATHS"
+          fi
+          BUILD_HASH=$(python3 .github/workflows/hash_git_files.py ${{ inputs.context }} $EXTRA_ARGS)
+          echo "build_context_tag=context-${BUILD_HASH}" >> "$GITHUB_OUTPUT"
+          echo "Calculated build context tag as: ${BUILD_HASH}"
+
+          IMAGE_NAME_WITH_NAMESPACE="${{ inputs.image_name }}"
+          IMAGE_NAME_NO_SLASHES="${IMAGE_NAME_WITH_NAMESPACE//\//-}"
+          echo "image_name_no_slashes=${IMAGE_NAME_NO_SLASHES}" >> "$GITHUB_OUTPUT"
+          echo "Image name without slashes: ${IMAGE_NAME_NO_SLASHES}"
+          echo "full_image_tag=${{ inputs.repository }}/${{ inputs.image_name }}:context-${BUILD_HASH}" >> "$GITHUB_OUTPUT"
+
+      - name: Test if docker image exists # deliberately before the mutex; describe-images is a read, so it is safe to run concurrently
+        if: ${{ inputs.push-role-name != 'no-push' }}
+        id: check-if-exists
+        run: |
+          BUILD_HASH=${{ steps.calculate-build-context-hash.outputs.build_context_tag }}
+          echo Checking for : $BUILD_HASH
+          if aws ecr describe-images --region ${{ steps.parse_ecr_url.outputs.aws_region }} --registry-id=${{ steps.parse_ecr_url.outputs.aws_account_id }} --repository-name=${{ inputs.image_name }} --image-ids=imageTag=$BUILD_HASH; then \
+            echo "Image was found in ECR"; \
+            echo "status=found" >> $GITHUB_OUTPUT
+          else \
+            echo "Image was not found in ECR"; \
+            echo "status=notfound" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Set up mutex # Github concurrency management is horrible, things get arbitrarily cancelled if queued up. So using mutex until github fixes itself. When multiple jobs are modifying cache at once, weird things can happen.  possible issue is https://github.com/actions/toolkit/issues/658
+        if: ${{ inputs.push-role-name != 'no-push' && steps.check-if-exists.outputs.status == 'notfound' }} # only serialize when this job may have to build and push a new image
+        uses: ben-z/gh-action-mutex@1ebad517141198e08d47cf72f3c0975316620a65 # v1.0.0-alpha.10
+        with:
+          branch: mutex-${{ inputs.repository }}-${{ inputs.image_name }}
+        timeout-minutes: 8  # this is the amount of time this action will wait to attempt to acquire the mutex lock before failing, e.g. if other jobs are queued up in front of it
+
+      - name: Re-test if docker image exists # another job may have pushed this exact build context while we waited on the mutex
+        if: ${{ inputs.push-role-name != 'no-push' && steps.check-if-exists.outputs.status == 'notfound' }}
+        id: recheck-if-exists
+        run: |
+          BUILD_HASH=${{ steps.calculate-build-context-hash.outputs.build_context_tag }}
+          echo Checking for : $BUILD_HASH
+          if aws ecr describe-images --region ${{ steps.parse_ecr_url.outputs.aws_region }} --registry-id=${{ steps.parse_ecr_url.outputs.aws_account_id }} --repository-name=${{ inputs.image_name }} --image-ids=imageTag=$BUILD_HASH; then \
+            echo "Image was found in ECR"; \
+            echo "status=found" >> $GITHUB_OUTPUT
+          else \
+            echo "Image was not found in ECR"; \
+            echo "status=notfound" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Resolve whether the image needs building # collapses the two probes into the single status the rest of the job keys off
+        if: ${{ inputs.push-role-name != 'no-push' }}
+        id: image-status
+        run: |
+          if [ "${{ steps.check-if-exists.outputs.status }}" = "found" ]; then
+            echo "status=found" >> $GITHUB_OUTPUT
+          else
+            echo "status=${{ steps.recheck-if-exists.outputs.status }}" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Pull existing image to package as artifact
+        if: ${{ inputs.save-as-artifact && steps.image-status.outputs.status == 'found' }}
+        run: |
+          docker pull ${{ steps.calculate-build-context-hash.outputs.full_image_tag }}
+
+      - name: Set up Docker Buildx
+        if: ${{ (inputs.save-as-artifact && inputs.push-role-name == 'no-push') || steps.image-status.outputs.status == 'notfound' }}
+        uses: docker/setup-buildx-action@v4.4.1
+        with:
+          version: v0.37.1
+
+      - name: Build Docker Image
+        if: ${{ (inputs.save-as-artifact && inputs.push-role-name == 'no-push') || steps.image-status.outputs.status == 'notfound' }}
+        uses: docker/build-push-action@v7.4.0
+        with:
+          context: ${{ inputs.context }}
+          build-contexts: ${{ inputs.build-contexts }}
+          push: ${{ inputs.push-role-name != 'no-push' && steps.image-status.outputs.status == 'notfound' }}
+          load: ${{ inputs.save-as-artifact }} # make the image available later for the `docker save` step
+          tags: ${{ steps.calculate-build-context-hash.outputs.full_image_tag }}
+
+      - name: Add git sha tag
+        if: ${{ inputs.push-role-name != 'no-push' }}
+        run: |
+          GIT_SHA_TAG="git-sha-${{ github.sha }}"
+          if aws ecr describe-images --region ${{ steps.parse_ecr_url.outputs.aws_region }} --registry-id=${{ steps.parse_ecr_url.outputs.aws_account_id }} --repository-name=${{ inputs.image_name }} --image-ids imageTag="$GIT_SHA_TAG" > /dev/null 2>&1; then
+            echo "Tag $GIT_SHA_TAG already exists in ECR, skipping"
+          else
+            aws ecr batch-get-image --registry-id=${{ steps.parse_ecr_url.outputs.aws_account_id }} --repository-name=${{ inputs.image_name }} --image-ids imageTag=${{ steps.calculate-build-context-hash.outputs.build_context_tag }} --query 'images[].imageManifest' --output text > manifest.json
+            # Every job on the push path tags the git sha, and jobs that find their image already in ECR no longer serialize on the mutex,
+            # so another job can apply this same tag between the check above and the put below. ECR reports that as
+            # ImageAlreadyExistsException, which by definition means the tag already points at this exact manifest, so it is safe to ignore.
+            # ImageTagAlreadyExistsException (a different manifest on an immutable repository) is a real conflict and still fails the step.
+            if ! aws ecr put-image --registry-id=${{ steps.parse_ecr_url.outputs.aws_account_id }} --repository-name=${{ inputs.image_name }} --image-tag "$GIT_SHA_TAG" --image-manifest file://manifest.json 2> put-image-error.txt; then
+              cat put-image-error.txt
+              if ! grep -q 'ImageAlreadyExistsException' put-image-error.txt; then
+                exit 1
+              fi
+              echo "Tag $GIT_SHA_TAG was applied concurrently by another job, nothing to do"
+            fi
+          fi
+
+      - name: Add tag for Production
+        if: ${{ inputs.push-role-name != 'no-push' && inputs.tag-for-production }}
+        run: |
+          # Unlike the git sha tag above, a concurrent ImageAlreadyExistsException is deliberately left fatal here.
+          # This step only runs from deploy workflows, which are not expected to overlap for the same image, so a
+          # duplicate put-image points at something unexpected about how the deploy was triggered and should be loud
+          # rather than swallowed. Note that PRODUCTION_CONTEXT_TAG keys on the build context hash rather than the
+          # commit, so two commits that leave the build context unchanged do share a tag.
+          aws ecr batch-get-image --registry-id=${{ steps.parse_ecr_url.outputs.aws_account_id }} --repository-name=${{ inputs.image_name }} --image-ids imageTag=${{ steps.calculate-build-context-hash.outputs.build_context_tag }} --query 'images[].imageManifest' --output text > manifest.json
+          PRODUCTION_CONTEXT_TAG="production--${{ steps.calculate-build-context-hash.outputs.build_context_tag }}"
+          if aws ecr describe-images --region ${{ steps.parse_ecr_url.outputs.aws_region }} --registry-id=${{ steps.parse_ecr_url.outputs.aws_account_id }} --repository-name=${{ inputs.image_name }} --image-ids imageTag="$PRODUCTION_CONTEXT_TAG" > /dev/null 2>&1; then
+            echo "Tag $PRODUCTION_CONTEXT_TAG already exists in ECR, skipping"
+          else
+            aws ecr put-image --registry-id=${{ steps.parse_ecr_url.outputs.aws_account_id }} --repository-name=${{ inputs.image_name }} --image-tag "$PRODUCTION_CONTEXT_TAG" --image-manifest file://manifest.json
+          fi
+          PRODUCTION_SHA_TAG="production--git-sha-${{ github.sha }}"
+          if aws ecr describe-images --region ${{ steps.parse_ecr_url.outputs.aws_region }} --registry-id=${{ steps.parse_ecr_url.outputs.aws_account_id }} --repository-name=${{ inputs.image_name }} --image-ids imageTag="$PRODUCTION_SHA_TAG" > /dev/null 2>&1; then
+            echo "Tag $PRODUCTION_SHA_TAG already exists in ECR, skipping"
+          else
+            aws ecr put-image --registry-id=${{ steps.parse_ecr_url.outputs.aws_account_id }} --repository-name=${{ inputs.image_name }} --image-tag "$PRODUCTION_SHA_TAG" --image-manifest file://manifest.json
+          fi
+
+      - name: Add release tag
+        if: ${{ inputs.push-role-name != 'no-push' && inputs.release-tag != '' }}
+        run: |
+          RELEASE_TAG="${{ inputs.release-tag }}"
+          if ! [[ "$RELEASE_TAG" =~ ^[A-Za-z0-9_][A-Za-z0-9._-]{0,127}$ ]]; then
+            echo "Invalid release-tag: '$RELEASE_TAG'. Must start with alphanumeric or underscore and contain only alphanumerics, dots, hyphens, underscores (max 128 chars)."
+            exit 1
+          fi
+          # This check is an intentional immutability guard rather than a concurrency one: reusing a version number is a
+          # human mistake worth failing on. A concurrent ImageAlreadyExistsException below is likewise left fatal, since
+          # release workflows are not expected to run twice at once for the same tag.
+          if aws ecr describe-images --region ${{ steps.parse_ecr_url.outputs.aws_region }} --registry-id=${{ steps.parse_ecr_url.outputs.aws_account_id }} --repository-name=${{ inputs.image_name }} --image-ids imageTag="$RELEASE_TAG" > /dev/null 2>&1; then
+            echo "Release tag '$RELEASE_TAG' already exists in ECR repository '${{ inputs.image_name }}'. Release tags are immutable; pick a new version or delete the existing tag if this was unintended."
+            exit 1
+          fi
+          aws ecr batch-get-image --registry-id=${{ steps.parse_ecr_url.outputs.aws_account_id }} --repository-name=${{ inputs.image_name }} --image-ids imageTag=${{ steps.calculate-build-context-hash.outputs.build_context_tag }} --query 'images[].imageManifest' --output text > manifest.json
+          aws ecr put-image --registry-id=${{ steps.parse_ecr_url.outputs.aws_account_id }} --repository-name=${{ inputs.image_name }} --image-tag "$RELEASE_TAG" --image-manifest file://manifest.json
+
+      - name: Save Docker Image as tar
+        if: ${{ inputs.save-as-artifact }}
+        run: docker save -o ${{ steps.calculate-build-context-hash.outputs.image_name_no_slashes }}.tar ${{ steps.calculate-build-context-hash.outputs.full_image_tag }}
+
+      - name: Upload Docker Image Artifact
+        if: ${{ inputs.save-as-artifact }}
+        uses: actions/upload-artifact@v7.0.1
+        with:
+          name: ${{ steps.calculate-build-context-hash.outputs.image_name_no_slashes }}
+          path: ${{ steps.calculate-build-context-hash.outputs.image_name_no_slashes }}.tar
+          if-no-files-found: error
+          retention-days: ${{ inputs.artifact-retention-days }}

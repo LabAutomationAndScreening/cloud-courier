@@ -1,0 +1,419 @@
+import argparse
+import datetime
+import logging
+import os
+import queue
+import threading
+from collections import defaultdict
+from pathlib import Path
+from queue import SimpleQueue
+from typing import override
+
+import boto3
+from mypy_boto3_ssm.client import SSMClient
+from pydantic import BaseModel
+from pydantic import Field
+from watchdog.events import DirCreatedEvent
+from watchdog.events import DirModifiedEvent
+from watchdog.events import FileClosedEvent
+from watchdog.events import FileCreatedEvent
+from watchdog.events import FileModifiedEvent
+from watchdog.events import FileSystemEvent
+from watchdog.events import FileSystemEventHandler
+from watchdog.observers import Observer
+
+from .aws_credentials import create_boto_session
+from .aws_credentials import get_role_arn
+from .constants import Checksum
+from .courier_config_models import CLOUDWATCH_HEARTBEAT_NAMESPACE
+from .courier_config_models import CLOUDWATCH_INSTANCE_ID_DIMENSION_NAME
+from .courier_config_models import HEARTBEAT_METRIC_NAME
+from .courier_config_models import FolderToWatch
+from .entrypoint.parser import get_version
+from .load_config import CourierConfig
+from .load_config import extract_role_name_from_arn
+from .load_config import load_config_from_aws
+from .upload import convert_path_to_s3_object_key
+from .upload import upload_to_s3
+
+RESET_POINT_FOR_LOOP_ITERATION_COUNTER = 20  # this is only for assertions in unit tests, so just reset the value if it gets arbitrarily high so that it doesn't cause an overflow when running in production
+INSTALLED_AGENT_VERSION_TAG_KEY = "installed-cloud-courier-agent-version"  # Warning! This tag key is originally created by the cloud-courier-infrastructure Pulumi code, so don't change it here without changing it there
+logger = logging.getLogger(__name__)
+
+
+class MissingCourierArgumentError(ValueError):
+    def __init__(self, argument_name: str):
+        super().__init__(f"{argument_name} is required to run the upload agent")
+
+
+class FileEventInfo(BaseModel, frozen=True):
+    file_system_event: FileSystemEvent
+    folder_config: FolderToWatch
+    timestamp: datetime.datetime = Field(default_factory=lambda: datetime.datetime.now(tz=datetime.UTC))
+
+
+def path_to_previously_uploaded_files_record() -> Path:
+    if (
+        os.name == "nt"
+    ):  # pragma: no cover # In Linux test environments, pathlib throws an error trying to run this: cannot instantiate 'WindowsPath' on your system
+        return (
+            Path("C:\\")
+            / "ProgramData"
+            / "LabAutomationAndScreening"
+            / "CloudCourier"
+            / "previously_uploaded_files.tsv"
+        )
+    return (  # pragma: no cover # In Windows test environments, pathlib will probably throw an error about this
+        Path("~/") / ".lab_automation_and_screening" / "cloud_courier" / "previously_uploaded_files.tsv"
+    )
+
+
+def create_record_file(record_file_path: Path):
+    if record_file_path.exists():
+        return
+
+    parent_dir = record_file_path.parent
+    parent_dir.mkdir(parents=True, exist_ok=True)
+    with record_file_path.open("w") as f:
+        _ = f.write("file_path\tcloud_path\tchecksum\n")
+
+
+def add_to_upload_record(*, record_file_path: Path, uploaded_file_path: Path, checksum: str, cloud_path: str):
+    with record_file_path.open("a") as f:
+        _ = f.write(f"{uploaded_file_path}\t{cloud_path}\t{checksum}\n")
+
+
+def parse_upload_record(record_file_path: Path) -> dict[Path, set[Checksum]]:
+    uploaded_files: dict[Path, set[Checksum]] = defaultdict(set)
+    with record_file_path.open("r") as f:
+        for line_idx, line in enumerate(f):
+            if line_idx == 0:
+                continue  # skip header
+            file_path, _, checksum = line.strip().split("\t")
+            uploaded_files[Path(file_path)].add(checksum)
+    return uploaded_files
+
+
+class EventHandler(FileSystemEventHandler):
+    def __init__(
+        self,
+        *,
+        file_system_events: SimpleQueue[FileEventInfo],
+        folder_config: FolderToWatch,
+        file_system_events_for_test_monitoring: SimpleQueue[FileEventInfo] | None = None,
+    ):
+        super().__init__()
+        self.file_system_events = file_system_events
+        self.folder_config = folder_config
+        self.file_system_events_for_test_monitoring = file_system_events_for_test_monitoring
+
+    @override
+    def on_any_event(self, event: FileSystemEvent) -> None:
+        logger.critical(f"{event} at {datetime.datetime.now(tz=datetime.UTC)}")
+
+    # FileCreatedEvent and FileModifiedEvent are prevalent on Windows
+    @override
+    def on_closed(self, event: FileClosedEvent) -> None:
+        self._add_event_to_queue(event)
+
+    @override
+    def on_created(self, event: DirCreatedEvent | FileCreatedEvent) -> None:
+        if isinstance(event, DirCreatedEvent):
+            return
+        self._add_event_to_queue(event)
+
+    @override
+    def on_modified(self, event: DirModifiedEvent | FileModifiedEvent) -> None:
+        if isinstance(event, DirModifiedEvent):
+            return
+        self._add_event_to_queue(event)
+
+    def _add_event_to_queue(self, event: FileSystemEvent):
+        event_info = FileEventInfo(file_system_event=event, folder_config=self.folder_config)
+        self.file_system_events.put(event_info)
+        if self.file_system_events_for_test_monitoring is not None:
+            self.file_system_events_for_test_monitoring.put(event_info)
+
+
+class MainLoop:
+    def __init__(  # noqa: PLR0913 # every argument here is keyword-only and names a distinct collaborator, so grouping them into a config object would add indirection without removing anything a caller has to know
+        self,
+        *,
+        stop_flag_dir: str,
+        boto_session: boto3.Session,
+        idle_loop_sleep_seconds: float,
+        previously_uploaded_files_record_path: Path,
+        stop_event: threading.Event | None = None,
+        create_duplicate_event_stream_for_test_monitoring: bool = False,
+    ):
+        super().__init__()
+        self.num_loop_iterations = 0
+        self.create_duplicate_event_stream_for_test_monitoring = create_duplicate_event_stream_for_test_monitoring
+        self.previously_uploaded_files_record_path = previously_uploaded_files_record_path
+        if stop_event is None:
+            # a caller that does not share an event still gets one, so the loop has a single stop path
+            self.stop_event = threading.Event()
+        else:
+            self.stop_event = stop_event
+        self.stop_flag_dir = Path(stop_flag_dir)
+        self.boto_session = boto_session
+        self._idle_loop_sleep_seconds = idle_loop_sleep_seconds
+        self.file_system_events: SimpleQueue[FileEventInfo]
+        self.file_system_events_for_test_monitoring: SimpleQueue[FileEventInfo]
+        self.observers: list[Observer] = []  # type: ignore[reportInvalidTypeForm] # pyright doesn't seem to like Observer
+        self.event_handler: EventHandler
+        self.config: CourierConfig
+        self.main_loop_entered = threading.Event()  # helpful for unit testing
+        create_record_file(self.previously_uploaded_files_record_path)
+        self.uploaded_files = parse_upload_record(self.previously_uploaded_files_record_path)
+        self.last_heartbeat_timestamp = datetime.datetime(
+            year=1988, month=1, day=19, tzinfo=datetime.UTC
+        )  # infinitely long ago
+
+    def _send_heartbeat_if_needed(self):
+        current_timestamp = datetime.datetime.now(tz=datetime.UTC)
+        seconds_since_last_heartbeat = (current_timestamp - self.last_heartbeat_timestamp).total_seconds()
+        if seconds_since_last_heartbeat >= self.config.app_config.heartbeat_frequency_seconds:
+            self._send_heartbeat()
+            self.last_heartbeat_timestamp = current_timestamp
+
+    def _send_heartbeat(self):
+        cloudwatch_client = self.boto_session.client("cloudwatch")
+        _ = cloudwatch_client.put_metric_data(
+            Namespace=CLOUDWATCH_HEARTBEAT_NAMESPACE,
+            MetricData=[
+                {
+                    "MetricName": HEARTBEAT_METRIC_NAME,
+                    "Dimensions": [
+                        {"Name": "Application", "Value": "CloudCourier"},
+                        {
+                            "Name": CLOUDWATCH_INSTANCE_ID_DIMENSION_NAME,
+                            "Value": self.config.role_name,
+                        },
+                    ],
+                    "Timestamp": datetime.datetime.now(tz=datetime.UTC),
+                    "Value": 1,
+                    "Unit": "Count",
+                },
+            ],
+        )
+        logger.info("Sent heartbeat to CloudWatch")
+
+    def _boot_up(self):
+        """Perform initial activities before starting passive monitoring.
+
+        This happens when the loop first starts, and also after any difference is detected in the configuration.
+        """
+        self.file_system_events = SimpleQueue()
+        if self.create_duplicate_event_stream_for_test_monitoring:
+            self.file_system_events_for_test_monitoring = SimpleQueue()
+        self.observers.clear()
+
+        self.config = load_config_from_aws(self.boto_session)
+        # TODO: check all the folders and raise an error if any don't exist
+        # TODO: implement refreshing the config
+        self._send_heartbeat_if_needed()
+        folder_config = next(iter(self.config.folders_to_watch.values()))  # TODO: support multiple folders to search
+        folder_path = Path(folder_config.folder_path)
+        glob_path = "*"
+        if folder_config.recursive:
+            glob_path = "**/*"
+        for file in folder_path.glob(glob_path):
+            if file.is_file():
+                # This isn't truly a FileClosedEvent, but it's easier to just have a single codepath for all uploading
+                event_info = FileEventInfo(
+                    file_system_event=FileClosedEvent(src_path=str(file)),
+                    folder_config=folder_config,
+                )
+                self.file_system_events.put(event_info)
+                if self.create_duplicate_event_stream_for_test_monitoring:
+                    self.file_system_events_for_test_monitoring.put(event_info)
+
+    def _upload_file(self, file_path: Path, folder_config: FolderToWatch):
+        object_key = convert_path_to_s3_object_key(str(file_path), folder_config)
+        checksum = upload_to_s3(
+            file_path=file_path,
+            boto_session=self.boto_session,
+            bucket_name=folder_config.s3_bucket_name,
+            object_key=object_key,
+        )
+        self.uploaded_files[file_path].add(checksum)
+        add_to_upload_record(
+            record_file_path=self.previously_uploaded_files_record_path,
+            uploaded_file_path=file_path,
+            checksum=checksum,
+            cloud_path=f"s3://{folder_config.s3_bucket_name}/{object_key}",
+        )
+
+    def _process_file_event_queue(self):
+        try:
+            event_info = self.file_system_events.get(timeout=0.05)
+        except queue.Empty:
+            return
+        event = event_info.file_system_event
+
+        seconds_since_event = (datetime.datetime.now(tz=datetime.UTC) - event_info.timestamp).total_seconds()
+        if seconds_since_event < event_info.folder_config.delay_seconds_before_upload:
+            logger.info(
+                f"Skipping {event.src_path} because it was created less than {event_info.folder_config.delay_seconds_before_upload} seconds ago"
+            )
+            # TODO: decouple this retry from the loop cadence. A re-queued event is only reconsidered on the
+            # next iteration, and each iteration makes an STS call (see the get_role_arn in run()), so how
+            # long a too-new file waits is bound to network latency rather than to delay_seconds_before_upload.
+            # TODO: stamp events from _boot_up with the file's mtime instead of the moment it was discovered.
+            # Today a file that has sat in the folder for hours still waits out the full delay after a restart,
+            # because FileEventInfo.timestamp defaults to now.
+            self.file_system_events.put(
+                event_info
+            )  # put it back in the queue to check again later if enough time has elapsed
+            return
+
+        assert isinstance(event.src_path, str), (
+            f"Expected event.src_path to be a string, but got {event.src_path} of type {type(event.src_path)}"
+        )
+        file_path = Path(event.src_path)
+        if file_path in self.uploaded_files:
+            logger.info(f"Skipping {file_path} because it has already been uploaded")
+            return  # TODO: decide how to handle changes to the file that alter the checksum
+        self._upload_file(file_path, event_info.folder_config)
+
+    def run(self) -> int:
+        self._boot_up()
+        self.observers.append(Observer())
+        folder_config = next(iter(self.config.folders_to_watch.values()))
+        folder_path = folder_config.folder_path
+        self.observers[0].schedule(
+            EventHandler(
+                file_system_events=self.file_system_events,
+                folder_config=folder_config,
+                file_system_events_for_test_monitoring=self.file_system_events_for_test_monitoring
+                if self.create_duplicate_event_stream_for_test_monitoring
+                else None,
+            ),
+            folder_path,
+            recursive=folder_config.recursive,
+        )
+        self.observers[0].start()
+        self.main_loop_entered.set()
+        while True:
+            self._send_heartbeat_if_needed()
+            if self.stop_event.is_set():
+                logger.info("Stop event set. Exiting the main loop")
+                break
+            # TODO: retire this whole flag-file path in favour of the stop event checked just above. The
+            #   Windows service supplies that event through SvcStop, which joins the worker with a 30s grace
+            #   period, so it gives the same "finish the current upload, then exit" behaviour but gated by
+            #   service ACLs rather than by write access to a directory. Two things have to happen first:
+            #   find what creates these flag files (nothing in this repo does -- presumably an SSM Run
+            #   Command in cloud-courier-infrastructure) and switch it to a service stop; then drop
+            #   --stop-flag-dir from the parser LAST, accepting and ignoring it for one release so an older
+            #   deployed command line does not start failing argument parsing.
+            if any(
+                item.is_file() for item in self.stop_flag_dir.iterdir()
+            ):  # TODO: maybe use a separate observer for the stop file
+                for item in self.stop_flag_dir.iterdir():
+                    if item.is_file():
+                        logger.info(f"Found stop flag file: {item}. Deleting it now")
+                        item.unlink()
+                break
+            logger.info(f"Connected to AWS as: {get_role_arn(self.boto_session)}")
+            self._process_file_event_queue()
+
+            self._idle_loop_sleep()
+            self.num_loop_iterations += 1
+            if self.num_loop_iterations > RESET_POINT_FOR_LOOP_ITERATION_COUNTER:
+                self.num_loop_iterations = 0
+        self.observers[0].stop()
+        self.observers[0].join()
+        return 0
+
+    def _idle_loop_sleep(self):
+        # breaking out as separate method for easier testing
+        # waiting on the stop event rather than sleeping means a shutdown is noticed immediately instead of
+        # after the remainder of the idle interval, which matters for the 30s grace period SvcStop allows
+        _ = self.stop_event.wait(
+            timeout=self._idle_loop_sleep_seconds
+        )  # TODO: dont sleep if there are events in the queue
+
+
+def _create_ssm_client(boto_session: boto3.Session) -> SSMClient:
+    # separate function for easy mocking in unit tests
+    return boto_session.client(  # pragma: no cover # The SSM Client is always stubbed during tests, so this code never executes
+        "ssm"
+    )
+
+
+def _update_instance_tag(*, boto_session: boto3.Session, role_arn: str):
+    # CAUTION! This function is only tested using botocore stubbing, so be careful when changing it. Localstack does not have thorough support for SSM Instances
+    role_name = extract_role_name_from_arn(role_arn)
+    ssm_client = _create_ssm_client(boto_session)
+
+    logger.critical(f"calling with role name: {role_name}")
+    instance_info_response = ssm_client.describe_instance_information(
+        Filters=[{"Key": "IamRole", "Values": [role_name]}]
+    )
+    instances = instance_info_response["InstanceInformationList"]
+    assert len(instances) == 1, (
+        f"Expected to find exactly one instance with role name {role_name}, but found {len(instances)}: {instances}"
+    )  # TODO: explicitly unit test this piece of business logic
+    instance = instances[0]
+    assert "InstanceId" in instance, (
+        f"Expected to find an instance ID in the instance information, but found {instance}"
+    )
+    instance_id = instance["InstanceId"]
+    _ = ssm_client.add_tags_to_resource(
+        ResourceType="ManagedInstance",
+        ResourceId=instance_id,
+        Tags=[
+            {"Key": INSTALLED_AGENT_VERSION_TAG_KEY, "Value": get_version(prepend_v=True)},
+        ],
+    )
+
+
+def start_courier(cli_args: argparse.Namespace, *, stop_event: threading.Event) -> int:
+    """Run the upload agent until it is told to stop.
+
+    Blocks for the lifetime of the agent, so callers run it on their own thread. The caller is responsible
+    for setting stop_event once this returns, so that the rest of the process shuts down with it rather than
+    carrying on with a dead agent.
+    """
+    logger.info('Starting "cloud-courier"')
+    # argparse cannot express "required unless --skip-upload-agent", and marking them required outright
+    # would force every caller that only wants the server -- the E2E harnesses, `--version`, the service
+    # management subcommands -- to invent placeholder values. Validate here instead, where the agent is
+    # actually about to use them, so a misconfigured deployment still fails immediately and says why.
+    if cli_args.aws_region is None:
+        raise MissingCourierArgumentError("--aws-region")
+    if cli_args.stop_flag_dir is None:
+        raise MissingCourierArgumentError("--stop-flag-dir")
+    # TODO: survive AWS being unreachable here rather than taking the whole process down. Everything from
+    #   this point to MainLoop is treated as fatal: an exception propagates out of the thread that
+    #   app_def._start_courier_thread runs, which records courier_failed and sets the shared stop event, so
+    #   uvicorn stops too and the process exits 1. A lab PC that boots before its network is up, or that
+    #   drops connectivity briefly, therefore kills the service instead of waiting. Retry with backoff,
+    #   waiting on stop_event rather than sleeping so a service stop during a retry is still prompt, and
+    #   keep MissingCourierArgumentError fatal -- no amount of waiting fixes a misconfiguration. Blanket
+    #   retrying every Exception would turn a genuine bug into a silent infinite loop.
+    #   This is also why the E2E and Windows service harnesses have to pass --skip-upload-agent: with no AWS
+    #   reachable from a CI runner, the agent cannot start and would take the server down with it, so the
+    #   service is currently only ever tested without the agent it exists to run.
+    if cli_args.use_generic_boto_session:
+        boto_session = boto3.Session()
+    else:
+        boto_session = create_boto_session(cli_args.aws_region)
+    if cli_args.immediate_shut_down:
+        logger.info("Exiting due to --immediate-shut-down")
+        return 0
+    role_arn = get_role_arn(boto_session)
+    logger.info(f"Connected to AWS as: {role_arn}")
+    _update_instance_tag(boto_session=boto_session, role_arn=role_arn)
+    if cli_args.shut_down_before_main_loop:
+        logger.info("Exiting due to --shut-down-before-main-loop")
+        return 0
+    return MainLoop(
+        stop_flag_dir=cli_args.stop_flag_dir,
+        boto_session=boto_session,
+        idle_loop_sleep_seconds=cli_args.idle_loop_sleep_seconds,
+        previously_uploaded_files_record_path=path_to_previously_uploaded_files_record(),
+        stop_event=stop_event,
+    ).run()

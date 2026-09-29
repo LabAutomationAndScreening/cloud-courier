@@ -44,10 +44,6 @@ jobs:
       - id: check
         uses: ./.github/actions/check-skip-duplicates
 
-  confirm-on-tagged-copier-template:
-    if: ${{ github.event_name == 'pull_request' || github.event_name == 'merge_group' }}
-    uses: ./.github/workflows/confirm-on-tagged-copier-template.yaml
-
   lint:
     needs:
       - get-values
@@ -60,8 +56,71 @@ jobs:
       id-token: write # needed to assume OIDC roles (e.g. for downloading from CodeArtifact)
     with:
       python-version: 3.13.9
+      setup-node: true
+      node-version: 24.11.1
 
-  test:
+  # Specific to this repository: the upstream template has no Sphinx docs, so this job is a deliberate
+  # divergence rather than something to backport.
+  build-docs:
+    name: Build Docs
+    timeout-minutes: 8
+    needs:
+      - lint
+      - check-skip-duplicate
+    if: needs.check-skip-duplicate.outputs.should-run == 'true'
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v7.0.1
+
+      - name: Install latest versions of python packages
+        uses: ./.github/actions/install_deps
+        with:
+          python-version: 3.13.9
+          skip-installing-ssm-plugin-manager: true
+
+      # --no-project because the docs import nothing from the app; they build from docs/requirements.txt
+      # alone, which is also exactly what ReadTheDocs installs, so the two cannot drift apart.
+      - name: Build docs
+        working-directory: ./docs
+        run: uv run --no-project --with-requirements requirements.txt make html SPHINXOPTS="-W"
+
+  unit-test-frontend:
+    name: Unit Test Frontend
+    timeout-minutes: 8
+    runs-on: ubuntu-24.04
+    needs:
+      - lint
+      - check-skip-duplicate
+    if: needs.check-skip-duplicate.outputs.should-run == 'true'
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v7.0.1
+
+      - name: Install latest versions of packages
+        uses: ./.github/actions/install_deps
+        env:
+          SKIP_PLAYWRIGHT_INSTALL: "1"
+        with:
+          node-version: 24.11.1
+          skip-installing-ssm-plugin-manager: true
+
+      - name: Unit test
+        run: pnpm --dir=frontend test-unit
+
+      - name: Upload test coverage on failure
+        if: ${{ failure() }}
+        uses: actions/upload-artifact@v7.0.1
+        with:
+          name: frontend-test-coverage
+          path: frontend/.coverage
+          if-no-files-found: error
+          include-hidden-files: true
+          retention-days: 5
+
+  unit-test-backend:
+    name: Unit Test Backend
+    timeout-minutes: 8
     needs:
       - lint
       - check-skip-duplicate
@@ -69,24 +128,24 @@ jobs:
     strategy:
       matrix:
         os:
+          # Deliberate divergence from the upstream template: no Windows runner here. use_windows_in_ci is
+          # true so that the MSI installer gets built, which also adds Windows to this matrix, but nearly
+          # every backend unit test talks to AWS through the localstack service container below, and GitHub
+          # only runs Linux service containers on Linux runners.
+          # TODO: get Windows unit-test coverage back. cloud-courier is a Windows-only product whose unit
+          #   tests only ever run on Linux, so path handling -- path_to_previously_uploaded_files_record()
+          #   and convert_path_to_s3_object_key() especially -- is never exercised on the platform it ships
+          #   to. Roughly 35 of the ~40 AWS-touching tests would have to move off localstack onto moto or
+          #   botocore stubs first; that makes the suite platform-agnostic and lets both runners keep the
+          #   100% coverage gate. Splitting out the handful of tests that already run anywhere was judged
+          #   not worth the marker maintenance.
           - "ubuntu-24.04"
-
-        python-version:
-
-          - 3.13.9
-
-        include:
-          - os: "ubuntu-24.04"
-            python-version: "3.13.9"
-            JOB_MATCHING_DEV_ENV: true
-
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 8
-    env:
-      UV_PYTHON: ${{ matrix.python-version }}
+    # Deliberate divergence from the upstream template, which has no service containers: nearly every
+    # backend unit test talks to AWS, so localstack has to be available.
     services:
       localstack:
-        image: localstack/localstack:4.14.0
+        image: localstack/localstack:4.14.0 # no known reason for not using newer versions, just pinning for best practice
         ports:
           - 4566:4566
         env:
@@ -94,30 +153,36 @@ jobs:
           AWS_SECRET_ACCESS_KEY: test
           SERVICES: s3,sts,cloudwatch,ssm,events,iam
     steps:
+      # The upstream long-file-paths step is dropped along with the Windows runner above; it is a no-op on
+      # Linux, and leaving it would imply this matrix still has a Windows entry.
       - name: Checkout code
         uses: actions/checkout@v7.0.1
 
-      - name: Install python tooling
+      - name: Install latest versions of python packages
         uses: ./.github/actions/install_deps
         with:
+          python-version: 3.13.9
           skip-installing-ssm-plugin-manager: true
-          skip-installing-pulumi-cli: true
-          python-version: ${{ matrix.python-version }}
 
+      # Deliberate divergence from the upstream template: the tests authenticate to localstack through this
+      # named AWS profile, which the devcontainer creates the same way in on-create-command-boilerplate.sh
       - name: Create AWS profile
         run: |
           sh .devcontainer/create-aws-profile.sh
           cat ~/.aws/config
 
+      # --cov-report=xml is specific to this repository: it produces the report the Codecov step uploads
       - name: Unit test
-        run: uv run pytest tests/unit --cov-report=xml --durations=5
+        run: uv --directory=backend run pytest tests/unit --cov-report=xml --durations=5
 
+      # Specific to this repository: the upstream template does not use Codecov.
       - name: Upload coverage to Codecov
-        # only upload coverage from fastest job
-        if: ${{ matrix.JOB_MATCHING_DEV_ENV && github.actor != 'dependabot[bot]' }} # dependabot by default doesn't have access to the necessary secret...and dependabot should never be changing coverage anyway so it's fine not uploading it
+        # dependabot has no access to the token, and should never be changing coverage anyway
+        if: ${{ github.actor != 'dependabot[bot]' }}
         uses: codecov/codecov-action@v7.1.0
         with:
-          files: ./coverage.xml
+          # uv --directory runs pytest with backend/ as the working directory, so the report lands there
+          files: ./backend/coverage.xml
           flags: unittests
           env_vars: OS,PYTHON
           name: codecov-umbrella
@@ -125,11 +190,57 @@ jobs:
           token: ${{ secrets.CODECOV_TOKEN }}
           slug: LabAutomationAndScreening/cloud-courier
 
+      - name: Upload test coverage on failure
+        if: ${{ failure() }}
+        uses: actions/upload-artifact@v7.0.1
+        with:
+          name: backend-test-coverage-${{ matrix.os }}
+          path: backend/coverage-report-pytest
+          if-no-files-found: error
+          retention-days: 5
 
-
-  executable:
+  build-frontend:
     needs:
-      - test
+      - lint
+      - unit-test-frontend
+      - unit-test-backend
+      - check-skip-duplicate
+    if: needs.check-skip-duplicate.outputs.should-run == 'true'
+
+    timeout-minutes: 8
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v7.0.1
+
+      - name: Install latest versions of node packages
+        uses: ./.github/actions/install_deps
+        env:
+          SKIP_PLAYWRIGHT_INSTALL: "1"
+        with:
+          node-version: 24.11.1
+          skip-installing-ssm-plugin-manager: true
+
+      - name: Build frontend
+        run: task build-frontend
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v7.0.1
+        with:
+          name: frontend-static-assets
+          path: frontend/.output/public/**/*
+          if-no-files-found: error
+          retention-days: 5
+
+
+
+
+  build-backend:
+    needs:
+      - lint
+      - unit-test-frontend
+      - unit-test-backend
+      - build-frontend
       - check-skip-duplicate
     if: needs.check-skip-duplicate.outputs.should-run == 'true'
     strategy:
@@ -137,68 +248,199 @@ jobs:
         os:
           - "ubuntu-24.04"
           - windows-2025-vs2026
-        python-version:
-
-          - 3.13.9
-
-    runs-on: ${{ matrix.os }}
     timeout-minutes: 8
-    env:
-      UV_PYTHON: ${{ matrix.python-version }}
+    runs-on: ${{ matrix.os }}
 
     steps:
+      - name: Allow long file paths
+        if: runner.os == 'Windows'
+        # Some tooling (e.g. vcrpy, syrupy) generates file names past the 260 character limit Windows
+        # defaults to. This has to happen before the checkout that writes those files.
+        run: git config --global core.longpaths true
+
       - name: Checkout code
         uses: actions/checkout@v7.0.1
-      - name: Install python tooling
+      - name: Download Frontend Static Assets
+        uses: actions/download-artifact@v8.0.1
+        with:
+          name: frontend-static-assets
+          path: backend/src/static
+
+      - name: Install latest versions of python packages
         uses: ./.github/actions/install_deps
         with:
+          python-version: 3.13.9
           skip-installing-ssm-plugin-manager: true
-          skip-installing-pulumi-cli: true
-          python-version: ${{ matrix.python-version }}
 
-      - name: Build executable
-        run: uv run pyinstaller pyinstaller.spec --log-level=DEBUG
-      - name: Upload executable artifact
+      - name: Build application
+        run: task bundle-executable-from-staged-static
+      - name: Tar files to preserve permissions on Linux during artifact upload # https://github.com/actions/upload-artifact?tab=readme-ov-file#permission-loss
+        run: tar -cvf app.tar backend/dist/cloud-courier
+      - name: Upload application artifact (Windows)
+        if: runner.os == 'Windows'
         uses: actions/upload-artifact@v7.0.1
         with:
-          name: exe-${{ matrix.os }}-${{ matrix.python-version }}
-          path: dist/
+          name: built-cloud-courier-${{ matrix.os }}
+          path: backend/dist/cloud-courier/**/*
           if-no-files-found: error
+          retention-days: 5
+      - name: Upload application artifact (Linux)
+        if: runner.os == 'Linux'
+        uses: actions/upload-artifact@v7.0.1
+        with:
+          name: built-cloud-courier-${{ matrix.os }}
+          path: app.tar
+          if-no-files-found: error
+          retention-days: 5
 
 
-
-  build-docs:
+  test-compiled-frontend-dev:
+    name: Test the compiled Frontend for pnpm dev mode
+    timeout-minutes: 8
+    runs-on: ubuntu-24.04
     needs:
-      - lint
+      - build-frontend
+      - build-backend
       - check-skip-duplicate
     if: needs.check-skip-duplicate.outputs.should-run == 'true'
-    strategy:
-      matrix:
-        python-version:
-
-          - 3.13.9
-
-
-    runs-on: ubuntu-24.04
-    timeout-minutes: 8
-    env:
-      UV_PYTHON: ${{ matrix.python-version }}
-
     steps:
       - name: Checkout code
         uses: actions/checkout@v7.0.1
 
-      - name: Install python tooling
+      - name: Install latest versions of node packages
         uses: ./.github/actions/install_deps
         with:
+          node-version: 24.11.1
           skip-installing-ssm-plugin-manager: true
-          skip-installing-pulumi-cli: true
-          python-version: ${{ matrix.python-version }}
 
-      - name: Build docs
-        working-directory: ./docs
-        run: uv run make html SPHINXOPTS="-W"
+      - name: Test
+        run: pnpm --dir=frontend test-compiled-dev
 
+  e2e-test-windows-service:
+    name: Windows Service Smoke Tests
+    timeout-minutes: 15
+    runs-on: windows-2025-vs2026
+    needs:
+      - build-backend
+      - check-skip-duplicate
+    if: needs.check-skip-duplicate.outputs.should-run == 'true'
+    steps:
+      - name: Allow long file paths
+        if: runner.os == 'Windows'
+        # Some tooling (e.g. vcrpy, syrupy) generates file names past the 260 character limit Windows
+        # defaults to. This has to happen before the checkout that writes those files.
+        run: git config --global core.longpaths true
+
+      - name: Checkout code
+        uses: actions/checkout@v7.0.1
+
+      - name: Install latest versions of python packages
+        uses: ./.github/actions/install_deps
+        with:
+          python-version: 3.13.9
+          skip-installing-ssm-plugin-manager: true
+
+      - name: Download Built executable
+        uses: actions/download-artifact@v8.0.1
+        with:
+          name: built-cloud-courier-windows-2025-vs2026
+          path: backend/dist/cloud-courier
+
+      - name: Windows service smoke tests
+        run: uv --directory=backend run pytest tests/windows_service --durations=5 --basetemp=dist/pytest-tmp
+
+      - name: Dump service crash logs on failure
+        if: ${{ failure() }}
+        shell: pwsh
+        run: |
+          $dumps = Get-ChildItem -Path "backend/dist/pytest-tmp" -Recurse -Filter "service-crash.log" -ErrorAction SilentlyContinue
+          if ($dumps.Count -eq 0) {
+            Write-Host "No service-crash.log files found under backend/dist/pytest-tmp"
+          } else {
+            foreach ($dump in $dumps) {
+              Write-Host "=== $($dump.FullName) ==="
+              Get-Content $dump.FullName
+            }
+          }
+
+      - name: Upload service logs on failure
+        if: ${{ failure() }}
+        uses: actions/upload-artifact@v7.0.1
+        with:
+          name: windows-service-logs
+          path: backend/dist/pytest-tmp/**/service-logs/**
+          if-no-files-found: warn
+          retention-days: 5
+
+  build-installer:
+    needs:
+      - build-backend
+      - check-skip-duplicate
+    if: needs.check-skip-duplicate.outputs.should-run == 'true'
+    permissions:
+      contents: read
+      actions: read # build-installer.yaml downloads the built bundle artifact
+    # Intentionally no `secrets: inherit` here (unlike the release job, which passes it when
+    # signing is enabled): CI builds an unsigned MSI as a build-breakage check; release signs it.
+    uses: ./.github/workflows/build-installer.yaml
+
+
+  e2e-test:
+    name: End-to-end Testing
+    timeout-minutes: 45
+    strategy:
+      matrix:
+        os:
+          - "ubuntu-24.04"
+          - windows-2025-vs2026
+    runs-on: ${{ matrix.os }}
+    needs:
+      - build-frontend
+      - build-backend
+      - check-skip-duplicate
+    if: needs.check-skip-duplicate.outputs.should-run == 'true'
+    steps:
+      - name: Allow long file paths
+        if: runner.os == 'Windows'
+        # Some tooling (e.g. vcrpy, syrupy) generates file names past the 260 character limit Windows
+        # defaults to. This has to happen before the checkout that writes those files.
+        run: git config --global core.longpaths true
+
+      - name: Checkout code
+        uses: actions/checkout@v7.0.1
+
+      - name: Install latest versions of node packages
+        uses: ./.github/actions/install_deps
+        with:
+          node-version: 24.11.1
+      - name: Download Built executable
+        uses: actions/download-artifact@v8.0.1
+        with:
+          name: built-cloud-courier-${{ matrix.os }}
+          path: backend/dist/cloud-courier
+      - name: Untar the artifact (on Linux)
+        if: runner.os == 'Linux'
+        run: tar -xvf backend/dist/cloud-courier/app.tar -C .
+
+      - name: E2E test
+        run: pnpm --dir=frontend test-e2e
+
+      - name: Upload Playwright report on failure
+        if: ${{ failure() }}
+        uses: actions/upload-artifact@v7.0.1
+        with:
+          name: playwright-report-${{ matrix.os }}
+          path: |
+            frontend/playwright-report
+            frontend/test-results
+          if-no-files-found: error
+          retention-days: 5
+
+
+
+  confirm-on-tagged-copier-template:
+    if: ${{ github.event_name == 'pull_request' || github.event_name == 'merge_group' }}
+    uses: ./.github/workflows/confirm-on-tagged-copier-template.yaml
 
   workflow-summary:
     runs-on: ubuntu-24.04
@@ -207,9 +449,15 @@ jobs:
       - get-values
       - check-skip-duplicate
       - lint
-      - test
       - build-docs
-      - executable
+      - unit-test-frontend
+      - build-frontend
+      - unit-test-backend
+      - build-backend
+      - test-compiled-frontend-dev
+      - e2e-test-windows-service
+      - build-installer
+      - e2e-test
       - confirm-on-tagged-copier-template
     permissions:
       statuses: write # needed for updating status on Dependabot PRs
