@@ -163,8 +163,24 @@ jobs:
           sh .devcontainer/create-aws-profile.sh
           cat ~/.aws/config
 
+      # --cov-report=xml is specific to this repository: it produces the report the Codecov step uploads
       - name: Unit test
-        run: uv --directory=backend run pytest tests/unit --durations=5
+        run: uv --directory=backend run pytest tests/unit --cov-report=xml --durations=5
+
+      # Specific to this repository: the upstream template does not use Codecov.
+      - name: Upload coverage to Codecov
+        # dependabot has no access to the token, and should never be changing coverage anyway
+        if: ${{ github.actor != 'dependabot[bot]' }}
+        uses: codecov/codecov-action@v7.1.0
+        with:
+          # uv --directory runs pytest with backend/ as the working directory, so the report lands there
+          files: ./backend/coverage.xml
+          flags: unittests
+          env_vars: OS,PYTHON
+          name: codecov-umbrella
+          fail_ci_if_error: true
+          token: ${{ secrets.CODECOV_TOKEN }}
+          slug: LabAutomationAndScreening/cloud-courier
 
       - name: Upload test coverage on failure
         if: ${{ failure() }}
