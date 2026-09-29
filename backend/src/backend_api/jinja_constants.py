@@ -14,4 +14,4 @@ DEFAULT_DEPLOYED_HOST = "127.0.0.1"
 # colliding with any other service already on the machine; kept separate from
 # APP_NAME (which also names crash dumps, templates, etc.).
 WINDOWS_SERVICE_NAME = f"LabAutomationAndScreening-{APP_NAME}"
-WINDOWS_SERVICE_DISPLAY_NAME = f"Lab Automation and SCreening {HUMAN_FRIENDLY_APP_NAME}"
+WINDOWS_SERVICE_DISPLAY_NAME = f"Lab Automation and Screening {HUMAN_FRIENDLY_APP_NAME}"

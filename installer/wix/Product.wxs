@@ -11,7 +11,7 @@
        perMachine + modern features. -->
   <Package
       Name="Cloud Courier"
-      Manufacturer="Lab Automation and SCreening"
+      Manufacturer="Lab Automation and Screening"
       Version="$(ProductVersion)"
       UpgradeCode="$(UpgradeCode)"
       Scope="perMachine"
@@ -58,13 +58,13 @@
     </Feature>
 
     <StandardDirectory Id="ProgramFiles64Folder">
-      <Directory Id="LabAutomationandSCreeningCompany" Name="LabAutomationandSCreening">
+      <Directory Id="LabAutomationandScreeningCompany" Name="LabAutomationandScreening">
         <Directory Id="INSTALLFOLDER" Name="CloudCourier" />
       </Directory>
     </StandardDirectory>
 
     <StandardDirectory Id="CommonAppDataFolder">
-      <Directory Id="LabAutomationandSCreeningData" Name="LabAutomationandSCreening">
+      <Directory Id="LabAutomationandScreeningData" Name="LabAutomationandScreening">
         <Directory Id="CloudCourierData" Name="CloudCourier">
           <Directory Id="LogsFolder" Name="logs" />
         </Directory>
@@ -85,7 +85,7 @@
           <util:PermissionEx User="SYSTEM" GenericAll="yes" />
           <util:PermissionEx User="Administrators" GenericAll="yes" />
         </CreateFolder>
-        <RegistryValue Root="HKLM" Key="Software\LabAutomationandSCreening\CloudCourier" Name="DataStamped" Type="integer" Value="1" KeyPath="yes" />
+        <RegistryValue Root="HKLM" Key="Software\LabAutomationandScreening\CloudCourier" Name="DataStamped" Type="integer" Value="1" KeyPath="yes" />
       </Component>
     </ComponentGroup>
 
@@ -93,7 +93,7 @@
     <!-- "Wix4" in Wix4UtilCA_X64 is the WixToolset.Util schema generation, not the
          toolset version; the id must match the schema, so it stays "Wix4" under WiX 7. -->
     <SetProperty Id="CA_InstallService"
-                 Value="&quot;[System64Folder]WindowsPowerShell\v1.0\powershell.exe&quot; -ExecutionPolicy Bypass -NoProfile -File &quot;[INSTALLFOLDER]scripts\install-service.ps1&quot; -ExePath &quot;[INSTALLFOLDER]app\cloud-courier.exe&quot; -Port &quot;[PORT]&quot; -LogDir &quot;[CommonAppDataFolder]LabAutomationandSCreening\CloudCourier\logs&quot; -ServiceAccount &quot;[SERVICE_ACCOUNT]&quot; -User &quot;[SERVICE_USER]&quot; -Password &quot;[SERVICE_PASSWORD]&quot; -AllowRemote &quot;[ALLOW_REMOTE]&quot;"
+                 Value="&quot;[System64Folder]WindowsPowerShell\v1.0\powershell.exe&quot; -ExecutionPolicy Bypass -NoProfile -File &quot;[INSTALLFOLDER]scripts\install-service.ps1&quot; -ExePath &quot;[INSTALLFOLDER]app\cloud-courier.exe&quot; -Port &quot;[PORT]&quot; -LogDir &quot;[CommonAppDataFolder]LabAutomationandScreening\CloudCourier\logs&quot; -ServiceAccount &quot;[SERVICE_ACCOUNT]&quot; -User &quot;[SERVICE_USER]&quot; -Password &quot;[SERVICE_PASSWORD]&quot; -AllowRemote &quot;[ALLOW_REMOTE]&quot;"
                  Before="CA_InstallService"
                  Sequence="execute" />
     <!-- WixSilentExec (not WixQuietExec) so the util CA does not log the command line it runs;

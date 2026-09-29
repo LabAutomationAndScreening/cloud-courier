@@ -8,11 +8,11 @@ WHAT IT INSTALLS
 ----------------
 
 - The Cloud Courier application under:
-      C:\Program Files\LabAutomationandSCreening\CloudCourier\
+      C:\Program Files\LabAutomationandScreening\CloudCourier\
 - A Windows service named "LabAutomationAndScreening-cloud-courier" that serves the app at:
       http://127.0.0.1:4000
 - A log directory (kept on upgrade and uninstall) under:
-      C:\ProgramData\LabAutomationandSCreening\CloudCourier\logs\
+      C:\ProgramData\LabAutomationandScreening\CloudCourier\logs\
 
 
 REQUIREMENTS
@@ -85,14 +85,14 @@ AFTER INSTALL
 
 - Service status:  Get-Service LabAutomationAndScreening-cloud-courier   (should be Running)
 - App:             http://127.0.0.1:4000/
-- Logs:            C:\ProgramData\LabAutomationandSCreening\CloudCourier\logs\
+- Logs:            C:\ProgramData\LabAutomationandScreening\CloudCourier\logs\
 
 
 UPGRADE
 -------
 
 Run a newer CloudCourier-<version>.msi. It replaces the installed version in
-place and keeps the data under C:\ProgramData\LabAutomationandSCreening\CloudCourier\.
+place and keeps the data under C:\ProgramData\LabAutomationandScreening\CloudCourier\.
 
 
 UNINSTALL
@@ -103,13 +103,13 @@ Settings > Apps (or Control Panel > Programs) > Cloud Courier > Uninstall, or:
    msiexec /x CloudCourier-<version>.msi /qn
 
 This stops and removes the service and the program files. The data directory
-(C:\ProgramData\LabAutomationandSCreening\CloudCourier\) is left in place.
+(C:\ProgramData\LabAutomationandScreening\CloudCourier\) is left in place.
 
 
 TROUBLESHOOTING
 ---------------
 
-- Service will not start: check C:\ProgramData\LabAutomationandSCreening\CloudCourier\logs\ and
+- Service will not start: check C:\ProgramData\LabAutomationandScreening\CloudCourier\logs\ and
   the Windows Event Log (Application).
 
 - Custom account install fails to start the service: confirm the account

@@ -59,8 +59,8 @@ The **Service account** dialog offers two choices:
 
 ## Data layout
 
-Binaries live under `Program Files\LabAutomationandSCreening\CloudCourier\`. The service log dir lives under
-`ProgramData\LabAutomationandSCreening\CloudCourier\logs\` so it survives upgrades and is reachable by a
+Binaries live under `Program Files\LabAutomationandScreening\CloudCourier\`. The service log dir lives under
+`ProgramData\LabAutomationandScreening\CloudCourier\logs\` so it survives upgrades and is reachable by a
 non-admin service account; the MSI ACLs it for SYSTEM/Administrators and `install-service.ps1` adds
 Modify for a custom account at install time.
 

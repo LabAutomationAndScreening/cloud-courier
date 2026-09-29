@@ -19,7 +19,7 @@ install_as_windows_service: true
 install_aws_ssm_port_forwarding_plugin: false
 install_claude_cli: true
 installer_branding_dir: frontend/public
-installer_manufacturer: Lab Automation and SCreening
+installer_manufacturer: Lab Automation and Screening
 installer_upgrade_code: 65bd762e-bd98-4ead-ae8f-2eeee6f1d754
 is_circuit_python_driver: false
 is_open_source: true
