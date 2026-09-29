@@ -32,6 +32,12 @@ jobs:
     runs-on: windows-2025-vs2026
     timeout-minutes: 45
     steps:
+      - name: Allow long file paths
+        if: runner.os == 'Windows'
+        # Some tooling (e.g. vcrpy, syrupy) generates file names past the 260 character limit Windows
+        # defaults to. This has to happen before the checkout that writes those files.
+        run: git config --global core.longpaths true
+
       - uses: actions/checkout@v7.0.1
         with:
           persist-credentials: false

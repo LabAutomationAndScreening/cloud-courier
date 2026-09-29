@@ -15,7 +15,7 @@ services:
         REPO_NAME: cloud-courier
     # You can run `devcontainer-info content-url` in codespaces to see what image base is
     volumes:
-      - ..:/workspaces/cloud-courier:cached
+      - ..:${WORKSPACE_MOUNT_TARGET:-/workspaces/cloud-courier}
       # Break out the venv folder as a separate docker volume for better performance on Windows hosts
       - python_venv:/workspaces/cloud-courier/backend/.venv
       # Break out the pnpm store folder as a separate docker volume for better performance on Windows hosts

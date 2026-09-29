@@ -147,6 +147,8 @@ jobs:
           AWS_SECRET_ACCESS_KEY: test
           SERVICES: s3,sts,cloudwatch,ssm,events,iam
     steps:
+      # The upstream long-file-paths step is dropped along with the Windows runner above; it is a no-op on
+      # Linux, and leaving it would imply this matrix still has a Windows entry.
       - name: Checkout code
         uses: actions/checkout@v7.0.1
 
@@ -244,6 +246,12 @@ jobs:
     runs-on: ${{ matrix.os }}
 
     steps:
+      - name: Allow long file paths
+        if: runner.os == 'Windows'
+        # Some tooling (e.g. vcrpy, syrupy) generates file names past the 260 character limit Windows
+        # defaults to. This has to happen before the checkout that writes those files.
+        run: git config --global core.longpaths true
+
       - name: Checkout code
         uses: actions/checkout@v7.0.1
       - name: Download Frontend Static Assets
@@ -311,6 +319,12 @@ jobs:
       - check-skip-duplicate
     if: needs.check-skip-duplicate.outputs.should-run == 'true'
     steps:
+      - name: Allow long file paths
+        if: runner.os == 'Windows'
+        # Some tooling (e.g. vcrpy, syrupy) generates file names past the 260 character limit Windows
+        # defaults to. This has to happen before the checkout that writes those files.
+        run: git config --global core.longpaths true
+
       - name: Checkout code
         uses: actions/checkout@v7.0.1
 
@@ -380,6 +394,12 @@ jobs:
       - check-skip-duplicate
     if: needs.check-skip-duplicate.outputs.should-run == 'true'
     steps:
+      - name: Allow long file paths
+        if: runner.os == 'Windows'
+        # Some tooling (e.g. vcrpy, syrupy) generates file names past the 260 character limit Windows
+        # defaults to. This has to happen before the checkout that writes those files.
+        run: git config --global core.longpaths true
+
       - name: Checkout code
         uses: actions/checkout@v7.0.1
 

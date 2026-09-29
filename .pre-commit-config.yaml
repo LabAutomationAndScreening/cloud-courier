@@ -134,6 +134,7 @@ repos:
               .*/__snapshots__/.*|
               .*/vendor_files/.*|
               .*\.svg|
+              .*\.wxs|  # formatter sorts attributes and joins multi-line ones, making the Windows installer files hard to read
           )$
 
   # Invalid File Checks
@@ -174,7 +175,7 @@ repos:
       - id: check-github-workflows
       - id: check-jsonschema
         name: check taskfiles
-        # Task itself silently ignores unknown keys, so a typo'd key is only caught by the schema
+        # Task itself silently ignores unknown keys, so a typo'd key is only caught by the schema.
         args: [--schemafile, 'https://taskfile.dev/schema.json']
         files: ^(Taskfile\.yaml|\.config/taskfiles/[^/]+\.yaml)$
 
@@ -204,10 +205,10 @@ repos:
     hooks:
       - id: detect-private-key
 
-#  - repo: https://github.com/woodruffw/zizmor-pre-commit
-#    rev: b933184438555436e38621f46ceb0c417cbed400  # frozen: v1.13.0
-#    hooks:
-#      - id: zizmor
+  # - repo: https://github.com/woodruffw/zizmor-pre-commit # TODO: implement this: https://github.com/LabAutomationAndScreening/copier-base-template/issues/95
+  #   rev: b933184438555436e38621f46ceb0c417cbed400  # frozen: v1.13.0
+  #   hooks:
+  #     - id: zizmor
 
   - repo: local
     hooks:
@@ -351,12 +352,13 @@ repos:
         # Keep Claude's settings.json synced with the JSON5 files. It's only for local development, so don't run it in CI
         name: merge Claude settings
         entry: bash -c '[[ "${GITHUB_ACTIONS:-}" == "true" || "${CI:-}" == "true" ]] && exit 0; bash .claude/helpers/merge-claude-settings.sh'
-        files: .claude/settings/.*\.(json|jsonc)$
+        files: ^\.claude/settings/.*\.(json|jsonc)$
         pass_filenames: false
         language: system
 
       - id: task-list
-        # Schema validation cannot see across files: only Task itself resolves the include paths in the root shim and rejects a task name defined by two flattened includes
+        # Schema validation cannot see across files: only Task itself resolves the include paths in the root shim and
+        # rejects a task name defined by two flattened includes. Listing is enough to trigger both errors.
         name: validate taskfile includes and task names
         entry: bash -c "task --list-all > /dev/null"
         files: ^(Taskfile\.yaml|\.config/taskfiles/.*)$
