@@ -5,7 +5,6 @@
 # You are welcome to make changes to this file in your repo if they are custom to your project,
 # but if the change should be shared with other projects, please backport it to the template repo.
 # =====================================================================================================
-# Re-exports specific to this repository
 from . import aws_credentials
 from . import load_config
 from . import main

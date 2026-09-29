@@ -7,7 +7,7 @@
 # =====================================================================================================
 [project]
 name = "backend-api"
-version = "0.0.5" # continues the version line from the pre-migration root pyproject.toml; the release workflow tags from this value
+version = "0.0.6"
 description = "Agent to upload files to cloud"
 
 readme = "README.md"
