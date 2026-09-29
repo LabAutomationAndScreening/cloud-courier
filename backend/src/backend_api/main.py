@@ -365,8 +365,6 @@ def _update_instance_tag(*, boto_session: boto3.Session, role_arn: str):
         ResourceType="ManagedInstance",
         ResourceId=instance_id,
         Tags=[
-            # prepend_v preserves the exact tag value written before the package was renamed; the
-            # cloud-courier-infrastructure Pulumi code reads this tag, so the format must not drift.
             {"Key": INSTALLED_AGENT_VERSION_TAG_KEY, "Value": get_version(prepend_v=True)},
         ],
     )

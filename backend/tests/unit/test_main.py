@@ -112,7 +112,9 @@ class TestUpdateInstanceTag(MainMixin):
         expected_computer_info = "cambridge--cytation-5"  # arbitrary
         expected_role_name = f"{expected_computer_info}--cloud-courier--dev"  # arbitrary
         expected_instance_id = "mi-0f07754091d56481f"  # arbitrary
-        _ = mocker.patch.object(main, get_version.__name__, return_value=expected_version, autospec=True)
+        mocked_get_version = mocker.patch.object(
+            main, get_version.__name__, return_value=expected_version, autospec=True
+        )
         _ = mocker.patch.object(
             main,
             get_role_arn.__name__,
@@ -151,6 +153,9 @@ class TestUpdateInstanceTag(MainMixin):
         assert start_courier(cli_args, stop_event=threading.Event()) == 0
 
         stubber.assert_no_pending_responses()
+        # the stubber compares against the mocked return value, so it cannot tell whether prepend_v was
+        # passed. cloud-courier-infrastructure depends on the leading "v", so assert the call itself.
+        mocked_get_version.assert_called_once_with(prepend_v=True)
 
         # Due to the way the Stubber works with the expected_params, the test would fail if the describe_instance_information method is called with a different role name than the one we are expecting
         # Due to the way the Stubber works with the expected_params, the test would fail if the add_tags_to_resource method is called with a different InstanceId that the one we are expecting
