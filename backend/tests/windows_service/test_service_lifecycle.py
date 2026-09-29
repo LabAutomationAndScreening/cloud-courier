@@ -55,6 +55,28 @@ def _run_sc(*args: str, check: bool = False) -> subprocess.CompletedProcess[byte
     )
 
 
+# Every test here installs the service with --skip-upload-agent, so what is covered is the service
+# lifecycle, not the agent running under it. The MSI is new with the nuxt template -- the repo shipped no
+# installer before it -- so wiring it up for real lab use is deliberately out of scope for the migration.
+# What has to be answered before anyone installs this on a lab PC:
+#
+# TODO: nothing supplies --aws-region or --stop-flag-dir. install-service.ps1 bakes only --port,
+#   --log-folder and --host into the ImagePath, and start_courier raises MissingCourierArgumentError
+#   without those two, so a real install registers a service that fails on its first start. Decide where
+#   they come from: an MSI property and wizard page like PORT, a build-time constant, or inferred from the
+#   SSM registration.
+# TODO: decide whether the installer's custom-account option can work at all. aws_credentials.py reads
+#   C:\Windows\System32\config\systemprofile\.aws\credentials, which is LocalSystem's profile and where the
+#   SSM agent writes hybrid-activation credentials. Any other service account has a different profile path
+#   and no read access there, so a custom account produces a service that starts and then cannot
+#   authenticate to AWS.
+# TODO: confirm whether the watched instrument folders are ever network shares or mapped drives. As
+#   LocalSystem the service authenticates to the network as the machine account, which usually cannot
+#   reach them, and that would decide both the account question above and extra_windows_service_rights.
+# TODO: reconcile the installer's data directory with path_to_previously_uploaded_files_record() in
+#   main.py. The MSI creates ...\LabAutomationandScreening\CloudCourier\logs while the agent writes its
+#   upload record under ...\LabAutomationAndScreening\CloudCourier. Windows treats those as one directory,
+#   but the two spellings should agree, and the crash dump location should be somewhere a lab admin looks.
 def _install_service(*, port: int, log_folder: Path, extra_runtime_args: Sequence[str] = ()) -> None:
     _ = _run_app(
         "service",
