@@ -300,6 +300,14 @@ class MainLoop:
             if self.stop_event.is_set():
                 logger.info("Stop event set. Exiting the main loop")
                 break
+            # TODO: retire this whole flag-file path in favour of the stop event checked just above. The
+            #   Windows service supplies that event through SvcStop, which joins the worker with a 30s grace
+            #   period, so it gives the same "finish the current upload, then exit" behaviour but gated by
+            #   service ACLs rather than by write access to a directory. Two things have to happen first:
+            #   find what creates these flag files (nothing in this repo does -- presumably an SSM Run
+            #   Command in cloud-courier-infrastructure) and switch it to a service stop; then drop
+            #   --stop-flag-dir from the parser LAST, accepting and ignoring it for one release so an older
+            #   deployed command line does not start failing argument parsing.
             if any(
                 item.is_file() for item in self.stop_flag_dir.iterdir()
             ):  # TODO: maybe use a separate observer for the stop file
@@ -380,6 +388,17 @@ def start_courier(cli_args: argparse.Namespace, *, stop_event: threading.Event) 
         raise MissingCourierArgumentError("--aws-region")
     if cli_args.stop_flag_dir is None:
         raise MissingCourierArgumentError("--stop-flag-dir")
+    # TODO: survive AWS being unreachable here rather than taking the whole process down. Everything from
+    #   this point to MainLoop is treated as fatal: an exception propagates out of the thread that
+    #   app_def._start_courier_thread runs, which records courier_failed and sets the shared stop event, so
+    #   uvicorn stops too and the process exits 1. A lab PC that boots before its network is up, or that
+    #   drops connectivity briefly, therefore kills the service instead of waiting. Retry with backoff,
+    #   waiting on stop_event rather than sleeping so a service stop during a retry is still prompt, and
+    #   keep MissingCourierArgumentError fatal -- no amount of waiting fixes a misconfiguration. Blanket
+    #   retrying every Exception would turn a genuine bug into a silent infinite loop.
+    #   This is also why the E2E and Windows service harnesses have to pass --skip-upload-agent: with no AWS
+    #   reachable from a CI runner, the agent cannot start and would take the server down with it, so the
+    #   service is currently only ever tested without the agent it exists to run.
     if cli_args.use_generic_boto_session:
         boto_session = boto3.Session()
     else:

@@ -163,6 +163,16 @@ def healthcheck(
     return HealthcheckResponse(version=get_version(prepend_v=query.prepend_v))
 
 
+# TODO: make this route set app.state.stop_event instead of calling os._exit, so that an HTTP shutdown
+#   drains the upload agent the way an SCM stop does. os._exit skips the lifespan teardown entirely, and
+#   more importantly skips the abort_multipart_upload handler in upload.py, so shutting down mid-upload of
+#   a large instrument file leaves orphaned parts in the bucket that stay billable until a lifecycle rule
+#   reaps them, and writes no entry to the upload record. stop_exe in tests/e2e/app_bootup.py already polls
+#   for exit and falls back to terminate(), so a graceful version keeps the E2E harness working.
+# TODO: decide whether this route should exist on this app at all, or require authentication. It is
+#   unauthenticated, and windows_service_bind_policy is configurable_loopback_default, so an operator can
+#   tick ALLOW_REMOTE at install time and expose an unauthenticated kill switch for a lab upload agent to
+#   the network. The upstream template serves a stateless API, where that matters far less than it does here.
 @app.get("/api/shutdown", summary="Shut down the server", tags=["system"])
 def shutdown() -> ShutdownResponse:
     logger.info("Server shutdown request received")

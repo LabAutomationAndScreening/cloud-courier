@@ -131,8 +131,14 @@ jobs:
           # Deliberate divergence from the upstream template: no Windows runner here. use_windows_in_ci is
           # true so that the MSI installer gets built, which also adds Windows to this matrix, but nearly
           # every backend unit test talks to AWS through the localstack service container below, and GitHub
-          # only runs Linux service containers on Linux runners. Restoring Windows unit-test coverage is
-          # tracked separately; it needs the AWS-touching tests moved off localstack first.
+          # only runs Linux service containers on Linux runners.
+          # TODO: get Windows unit-test coverage back. cloud-courier is a Windows-only product whose unit
+          #   tests only ever run on Linux, so path handling -- path_to_previously_uploaded_files_record()
+          #   and convert_path_to_s3_object_key() especially -- is never exercised on the platform it ships
+          #   to. Roughly 35 of the ~40 AWS-touching tests would have to move off localstack onto moto or
+          #   botocore stubs first; that makes the suite platform-agnostic and lets both runners keep the
+          #   100% coverage gate. Splitting out the handful of tests that already run anywhere was judged
+          #   not worth the marker maintenance.
           - "ubuntu-24.04"
     runs-on: ${{ matrix.os }}
     # Deliberate divergence from the upstream template, which has no service containers: nearly every
