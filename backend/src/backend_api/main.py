@@ -257,6 +257,12 @@ class MainLoop:
             logger.info(
                 f"Skipping {event.src_path} because it was created less than {event_info.folder_config.delay_seconds_before_upload} seconds ago"
             )
+            # TODO: decouple this retry from the loop cadence. A re-queued event is only reconsidered on the
+            # next iteration, and each iteration makes an STS call (see the get_role_arn in run()), so how
+            # long a too-new file waits is bound to network latency rather than to delay_seconds_before_upload.
+            # TODO: stamp events from _boot_up with the file's mtime instead of the moment it was discovered.
+            # Today a file that has sat in the folder for hours still waits out the full delay after a restart,
+            # because FileEventInfo.timestamp defaults to now.
             self.file_system_events.put(
                 event_info
             )  # put it back in the queue to check again later if enough time has elapsed
